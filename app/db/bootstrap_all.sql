@@ -253,3 +253,22 @@ SELECT
 FROM api.api_wifi_hotspot_with_context h
 LEFT JOIN api.api_hotspot_crime_12m_500m m
   ON m.wifi_id = h.wifi_id;
+
+-- 1. Mapping table for BSSID → WiFi Hotspot
+CREATE TABLE IF NOT EXISTS api.api_wifi_bssid_map (
+    bssid TEXT PRIMARY KEY,
+    wifi_id TEXT REFERENCES core.core_wifi_hotspot(wifi_id)
+);
+
+-- 2. User incidents (CRUD model)
+CREATE TABLE IF NOT EXISTS api.api_user_incidents (
+    id SERIAL PRIMARY KEY,
+    wifi_id TEXT REFERENCES core.core_wifi_hotspot(wifi_id),
+    bssid TEXT,
+    description TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Recommended indexes
+CREATE INDEX IF NOT EXISTS idx_bssid_wifi ON api.api_wifi_bssid_map (wifi_id);
+CREATE INDEX IF NOT EXISTS idx_incidents_wifi ON api.api_user_incidents (wifi_id);
