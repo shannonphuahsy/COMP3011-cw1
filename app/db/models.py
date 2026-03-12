@@ -102,6 +102,7 @@ async def get_crime_count(wifi_id: str):
 # ----------------------
 # Incidents CRUD
 # ----------------------
+
 async def create_incident(wifi_id: str, bssid: str, desc: str):
     db = await get_db()
     row = await db.fetchrow("""
@@ -112,6 +113,16 @@ async def create_incident(wifi_id: str, bssid: str, desc: str):
     await db.close()
     return row
 
+async def update_incident(incident_id: int, description: str):
+    db = await get_db()
+    row = await db.fetchrow("""
+        UPDATE api.api_user_incidents
+        SET description = $2
+        WHERE id = $1
+        RETURNING *
+    """, incident_id, description)
+    await db.close()
+    return row
 
 async def list_incidents(wifi_id: str):
     db = await get_db()
