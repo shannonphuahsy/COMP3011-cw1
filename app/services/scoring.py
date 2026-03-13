@@ -25,7 +25,7 @@ def compute_score(hotspot, crime_count, bssid):
         score += 0.5
 
     # 3. Device density
-    dd = hotspot["device_density_per_km2"] or 0
+    dd = hotspot.get("device_density_per_km2") or 0
     dd_factor = min(dd / 1000, 3)
     score += dd_factor
     if dd_factor > 1:

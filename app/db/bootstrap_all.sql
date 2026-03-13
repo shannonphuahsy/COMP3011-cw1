@@ -272,3 +272,16 @@ CREATE TABLE IF NOT EXISTS api.api_user_incidents (
 -- Recommended indexes
 CREATE INDEX IF NOT EXISTS idx_bssid_wifi ON api.api_wifi_bssid_map (wifi_id);
 CREATE INDEX IF NOT EXISTS idx_incidents_wifi ON api.api_user_incidents (wifi_id);
+
+CREATE TABLE api.api_wifi_bssid_map (
+    bssid TEXT PRIMARY KEY,
+    wifi_id TEXT NOT NULL
+);
+
+CREATE TABLE api.api_user_incidents (
+    id SERIAL PRIMARY KEY,
+    wifi_id TEXT NOT NULL,
+    bssid TEXT,
+    description TEXT,
+    created_at TIMESTAMP DEFAULT NOW()
+);
