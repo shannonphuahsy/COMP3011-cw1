@@ -1,68 +1,124 @@
-from fastapi import APIRouter, HTTPException, status
+# app/routers/incidents.py
+
+from fastapi import APIRouter, HTTPException, status, Request
 from app.db import models
 from app.schemas.incident import IncidentCreate, IncidentUpdate
+from app.core.limiter import limiter  # unified SlowAPI limiter
 
 router = APIRouter(
     prefix="/incidents",
     tags=["Incidents"]
 )
 
+
+# --------------------------------------------------------------
+# CREATE INCIDENT
+# --------------------------------------------------------------
+
 @router.post(
     "/",
     status_code=status.HTTP_201_CREATED,
     summary="Create a new safety incident",
     description=(
-        "Adds a user‑reported safety incident attached to a hotspot/BSSID. "
-        "This does not modify the authoritative hotspot dataset."
+        "Creates a **user-reported safety incident**, associated with a specific hotspot "
+        "via its `wifi_id` and `bssid`. Incidents typically represent suspicious behaviour, "
+        "device anomalies, or user-reported concerns. This endpoint **does not modify** any "
+        "authoritative hotspot metadata, but contributes to user-facing risk intelligence."
     ),
     responses={
-        201: {"description": "Incident created"},
-        422: {"description": "Validation error"}
+        201: {"description": "Incident successfully created"},
+        422: {"description": "Validation error (missing or invalid fields)"}
     }
 )
-async def create_incident_route(payload: IncidentCreate):
-    row = await models.create_incident(payload.wifi_id, payload.bssid, payload.description)
+@limiter.limit("10/minute")  # per-IP create limit
+async def create_incident_route(
+    request: Request,
+    payload: IncidentCreate
+):
+    """
+    Create a new safety incident linked to a hotspot/BSSID.
+    """
+    row = await models.create_incident(
+        payload.wifi_id,
+        payload.bssid,
+        payload.description
+    )
     return dict(row)
 
+
+# --------------------------------------------------------------
+# LIST INCIDENTS FOR A HOTSPOT
+# --------------------------------------------------------------
 
 @router.get(
     "/{wifi_id}",
     summary="List incidents for a hotspot",
-    description="Returns incidents associated with a **wifi_id**, ordered by newest first.",
-    responses={200: {"description": "Array of incidents (possibly empty)"}}
+    description=(
+        "Returns all incidents associated with a given **WiFi hotspot ID (`wifi_id`)**, "
+        "ordered by newest first. These reports typically originate from users or automated "
+        "device warnings and can provide context for hotspot safety assessment."
+    ),
+    responses={
+        200: {"description": "List of incidents (may be empty)"},
+        404: {"description": "Hotspot has no recorded incidents (optional)"}
+    }
 )
 async def list_for_wifi(wifi_id: str):
     rows = await models.list_incidents(wifi_id)
     return [dict(r) for r in rows]
 
 
+# --------------------------------------------------------------
+# UPDATE INCIDENT
+# --------------------------------------------------------------
+
 @router.patch(
     "/{incident_id}",
-    summary="Update an incident description",
-    description="Updates the **description** of an existing incident.",
+    summary="Update an incident",
+    description=(
+        "Updates the **description** text of an existing incident. This is typically used "
+        "when refining the original report, fixing typos, or adding clarifications. "
+        "The hotspot association cannot be changed."
+    ),
     responses={
-        200: {"description": "Incident updated"},
+        200: {"description": "Incident successfully updated"},
         404: {"description": "Incident not found"},
         422: {"description": "Validation error"}
     }
 )
-async def update_incident_route(incident_id: int, body: IncidentUpdate):
+@limiter.limit("10/minute")  # per-IP update limit
+async def update_incident_route(
+    request: Request,
+    incident_id: int,
+    body: IncidentUpdate
+):
     row = await models.update_incident(incident_id, body.description)
     if not row:
-        raise HTTPException(status_code=404, detail="Incident not found")
+        raise HTTPException(404, "Incident not found")
     return dict(row)
 
+
+# --------------------------------------------------------------
+# DELETE INCIDENT
+# --------------------------------------------------------------
 
 @router.delete(
     "/{incident_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Delete an incident",
-    description="Deletes the specified incident. Returns **204 No Content** on success.",
+    description=(
+        "Deletes the specified incident permanently. This operation is irreversible and "
+        "typically restricted to administrative tools or automated cleanup tasks."
+    ),
     responses={
-        204: {"description": "Incident deleted"},
-        404: {"description": "Incident not found (if you choose to enforce)"},
+        204: {"description": "Incident successfully deleted"},
+        404: {"description": "Incident not found"}
     }
 )
-async def delete_incident_route(incident_id: int):
+@limiter.limit("10/minute")  # per-IP delete limit
+async def delete_incident_route(
+    request: Request,
+    incident_id: int
+):
     await models.delete_incident(incident_id)
     return None

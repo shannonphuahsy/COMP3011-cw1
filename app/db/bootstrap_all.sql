@@ -237,22 +237,109 @@ REFRESH MATERIALIZED VIEW api.api_hotspot_crime_12m_500m;
 ------------------------------------------------------------
 -- FINAL API VIEW (RISK SCORE)
 ------------------------------------------------------------
-CREATE OR REPLACE VIEW api.api_wifi_hotspot_risk AS
+-- REPLACE the enriched hotspot view with a computed exposure score
+CREATE OR REPLACE VIEW api.api_wifi_hotspot_risk
+(   wifi_id,
+    name,
+    postcode,
+    city,
+    latitude,
+    longitude,
+    status,
+    security_protection,
+    cyber_exposure_score,
+    risk_label,
+    crime_12m_count,
+    incidents_count,
+    last_incident_at,
+    geom_geog
+)
+AS
+WITH incidents_agg AS (
+  SELECT
+    wifi_id,
+    COUNT(*) AS incidents_count,
+    MAX(created_at) AS last_incident_at
+  FROM api.api_user_incidents
+  GROUP BY wifi_id
+),
+crime AS (
+  SELECT
+    wifi_id,
+    crime_12m_count
+  FROM api.api_hotspot_crime_12m_500m
+),
+base AS (
+  SELECT
+    h.wifi_id,
+    h.name,
+    h.postcode,
+    h.city,
+    h.latitude,
+    h.longitude,
+    h.status,
+    h.security_protection,
+    h.geom_geog,
+    COALESCE(c.crime_12m_count, 0) AS crime_12m_count,
+    COALESCE(i.incidents_count, 0) AS incidents_count,
+    i.last_incident_at
+  FROM core.core_wifi_hotspot h
+  LEFT JOIN crime c      USING (wifi_id)
+  LEFT JOIN incidents_agg i USING (wifi_id)
+),
+scored AS (
+  SELECT
+    b.*,
+    /* Security mode weight (highest influence) */
+    CASE LOWER(COALESCE(b.security_protection, ''))
+      WHEN 'open' THEN 60      -- open network: highest exposure
+      WHEN 'wpa2' THEN 30      -- WPA2: medium exposure
+      WHEN 'wpa3' THEN 10      -- WPA3/SAE: lowest exposure
+      ELSE 20                  -- unknown/other
+    END AS pts_security,
+
+    /* Crime context weight (simple buckets; tune as you wish) */
+    CASE
+      WHEN b.crime_12m_count >= 20 THEN 10
+      WHEN b.crime_12m_count >= 10 THEN 5
+      ELSE 0
+    END AS pts_crime,
+
+    /* Recent incidents weight */
+    CASE
+      WHEN b.incidents_count > 0 THEN 10
+      ELSE 0
+    END AS pts_incidents
+  FROM base b
+),
+final AS (
+  SELECT
+    s.*,
+    /* Sum and clamp 0..100; keep type float for API compatibility */
+    LEAST(100.0, GREATEST(0.0, (s.pts_security + s.pts_crime + s.pts_incidents)))::float AS cyber_exposure_score,
+    CASE
+      WHEN (s.pts_security + s.pts_crime + s.pts_incidents) >= 60 THEN 'unsafe'
+      WHEN (s.pts_security + s.pts_crime + s.pts_incidents) >= 30 THEN 'caution'
+      ELSE 'safe'
+    END AS risk_label
+  FROM scored s
+)
 SELECT
-  h.*,
-  m.crime_12m_count,
-  ROUND((
-      COALESCE( LN(1 + device_density_per_km2), 0) * 0.5
-    + CASE LOWER(COALESCE(h.security_protection, ''))
-        WHEN 'open' THEN 2.0
-        WHEN 'wpa2' THEN 0.5
-        ELSE 1.0
-      END
-    + COALESCE(m.crime_12m_count / 10.0, 0)
-  )::numeric, 2) AS cyber_exposure_score
-FROM api.api_wifi_hotspot_with_context h
-LEFT JOIN api.api_hotspot_crime_12m_500m m
-  ON m.wifi_id = h.wifi_id;
+  wifi_id,
+  name,
+  postcode,
+  city,
+  latitude,
+  longitude,
+  status,
+  security_protection,
+  cyber_exposure_score,         -- computed, no longer 6.75
+  risk_label,                   -- new (safe / caution / unsafe)
+  crime_12m_count,
+  incidents_count,
+  last_incident_at,
+  geom_geog
+FROM final;
 
 -- 1. Mapping table for BSSID → WiFi Hotspot
 CREATE TABLE IF NOT EXISTS api.api_wifi_bssid_map (
@@ -285,3 +372,12 @@ CREATE TABLE api.api_user_incidents (
     description TEXT,
     created_at TIMESTAMP DEFAULT NOW()
 );
+
+-- ensure gist index (done once)
+CREATE INDEX IF NOT EXISTS idx_hotspot_geog
+  ON core.core_wifi_hotspot
+  USING GIST (geom_geog);
+
+
+
+

@@ -1,7 +1,14 @@
-# app/routers/cache.py
+# app/cache.py
+
 import redis.asyncio as redis
 
-_redis = redis.Redis(host="127.0.0.1", port=6379, db=0, decode_responses=True)
+# Local Redis default. Change to Upstash if needed.
+_redis = redis.Redis(
+    host="127.0.0.1",
+    port=6379,
+    db=0,
+    decode_responses=True
+)
 
 async def cache_get(key: str):
     return await _redis.get(key)

@@ -1,35 +1,53 @@
+# app/schemas/assessment.py
+
+from typing import List, Dict, Any
 from pydantic import BaseModel, Field
-from typing import List
+
+
+class Reason(BaseModel):
+    """
+    A single factor contributing to the overall safety score.
+    """
+    code: str = Field(..., description="Short identifier for the risk or mitigation factor.")
+    message: str = Field(..., description="Human-readable explanation of the factor.")
+    weight: int = Field(..., description="Numerical impact on the risk score (+ risk, - mitigation).")
+
+
+class Recommendation(BaseModel):
+    """
+    A user-friendly recommendation based on the computed safety verdict.
+    """
+    message: str = Field(..., description="Actionable advice for the user.")
+
 
 class SafetyAssessment(BaseModel):
-    bssid: str = Field(..., description="BSSID queried")
-    wifi_id: str = Field(..., description="Resolved WiFi ID for the BSSID")
-    risk_score: float = Field(..., description="Composite risk score (higher = riskier)")
-    crime_last_12m: int = Field(..., description="Crimes within 500 m over the last 12 months")
-    security_rating: str = Field(..., description="Wi‑Fi security mode (open|wpa2|wpa3)")
-    device_density: float = Field(..., description="Estimated devices per km² in the LSOA")
-    risk_factors: List[str] = Field(..., description="Explanations driving the score")
-    recommendations: List[str] = Field(..., description="Actionable safety advice")
+    """
+    The complete Wi‑Fi safety assessment model returned by the unified endpoint.
 
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "bssid": "AA:BB:CC:DD:EE:01",
-                "wifi_id": "c297205e-1226-46de-9868-5103d098b1d9",
-                "risk_score": 7.4,
-                "crime_last_12m": 14,
-                "security_rating": "open",
-                "device_density": 1480.0,
-                "risk_factors": [
-                    "Open Wi‑Fi (no encryption)",
-                    "Higher‑than‑average crime density",
-                    "High device density — more potential attackers"
-                ],
-                "recommendations": [
-                    "Avoid sensitive logins",
-                    "Use a VPN",
-                    "Disable file sharing and auto-connect",
-                    "Ensure firewall is active"
-                ]
-            }
-        }
+    This model is highly explainable and transparent:
+    - verdict:    'safe', 'caution', or 'unsafe'
+    - score:      integer 0–100
+    - reasons:    list of weighted contributing factors
+    - recommendations: practical tips for safe usage
+    - context:    extra metadata for UI or debugging
+    """
+    wifi_id: str = Field(..., description="Identifier of the matched hotspot from the database.")
+    bssid: str = Field(...,
+                       description="BSSID used for the assessment (may be 'unknown' when using SSID-only resolution).")
+
+    verdict: str = Field(..., description="Final classification: safe / caution / unsafe.")
+    score: int = Field(..., ge=0, le=100, description="0–100 composite risk score (higher = riskier).")
+
+    reasons: List[Reason] = Field(
+        default_factory=list,
+        description="List of weighted risk and mitigation factors."
+    )
+    recommendations: List[Recommendation] = Field(
+        default_factory=list,
+        description="Actions the user can take to improve safety."
+    )
+
+    context: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Additional metadata such as security mode, crime count, location, status, and distance."
+    )
