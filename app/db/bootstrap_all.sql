@@ -378,6 +378,12 @@ CREATE INDEX IF NOT EXISTS idx_hotspot_geog
   ON core.core_wifi_hotspot
   USING GIST (geom_geog);
 
-
+CREATE TABLE IF NOT EXISTS auth_user (
+  id SERIAL PRIMARY KEY,
+  email TEXT UNIQUE NOT NULL,
+  password_hash TEXT NOT NULL,
+  role TEXT NOT NULL DEFAULT 'user',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 
 

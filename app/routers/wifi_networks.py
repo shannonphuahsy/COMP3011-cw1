@@ -1,14 +1,18 @@
 # app/routers/wifi_networks.py
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
 from app.db import models
 from app.db.database import get_db
 from app.schemas.hotspot import Hotspot
 from app.cache import cache_get, cache_setex
+from app.core.auth_combined import require_api_key_or_jwt
 import json
 
-router = APIRouter(prefix="/hotspots", tags=["WiFi"])
-
+router = APIRouter(
+    prefix="/hotspots",
+    tags=["WiFi"],
+    dependencies=[Depends(require_api_key_or_jwt)]
+)
 
 # --------------------------------------------------------------
 # DISCOVERY ENDPOINTS

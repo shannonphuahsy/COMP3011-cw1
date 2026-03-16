@@ -5,8 +5,14 @@ from app.db import models
 from app.services.scoring import compute_score
 from app.schemas.assessment import SafetyAssessment
 from app.core.limiter import limiter
+from fastapi import Depends
+from app.core.auth_combined import require_api_key_or_jwt
 
-router = APIRouter(prefix="/assessments", tags=["Assessments"])
+router = APIRouter(
+    prefix="/assessments",
+    tags=["Assessments"],
+    dependencies=[Depends(require_api_key_or_jwt)]  # read endpoints accept either auth
+)
 
 
 # ============================================================

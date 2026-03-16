@@ -1,7 +1,14 @@
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Depends
+from app.core.auth_combined import require_api_key_or_jwt
 from app.db import models
 
-router = APIRouter(prefix="/analytics", tags=["Analytics"])
+
+router = APIRouter(
+    prefix="/analytics",
+    tags=["Analytics"],
+    dependencies=[Depends(require_api_key_or_jwt)]
+)
+
 
 @router.get(
     "/nearby",
