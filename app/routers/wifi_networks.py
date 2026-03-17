@@ -5,36 +5,41 @@ from app.db import models
 from app.db.database import get_db
 from app.schemas.hotspot import Hotspot
 from app.cache import cache_get, cache_setex
-from app.core.auth_combined import require_api_key_or_jwt
 import json
+from app.services.dependencies import require_user
 
-router = APIRouter(
-    prefix="/hotspots",
-    tags=["WiFi"],
-    dependencies=[Depends(require_api_key_or_jwt)]
-)
+router = APIRouter(prefix="/hotspots", tags=["WiFi"])
+
 
 # --------------------------------------------------------------
-# DISCOVERY ENDPOINTS
+# DISCOVERY ENDPOINTS (ALL PUBLIC — UNCHANGED)
 # --------------------------------------------------------------
 
 @router.get(
     "/",
     summary="List all WiFi hotspots",
     description=(
-        "Returns the full list of enriched public WiFi hotspots, including core attributes "
-        "and computed risk metadata. Useful for map visualisation, bulk browsing, or populating "
-        "client-side hotspot lists."
+        "Returns the full list of enriched public WiFi hotspots, including core attributes, "
+        "location coordinates, and any computed risk metadata.\n\n"
+        "**Cyber Exposure Score Explanation**\n"
+        "Each hotspot may include a *Cyber Exposure Score* — a simple 0–100 value indicating "
+        "how risky the hotspot may be:\n\n"
+        "🟢 **0–30: Low Risk (Safe)** — Strong security and low environmental threat.\n"
+        "🟡 **31–60: Medium Risk (Caution)** — Some concerns such as weaker security, "
+        "moderate crime levels, or minor user‑reported issues.\n"
+        "🔴 **61–100: High Risk (Unsafe)** — Open network, high crime exposure, or suspicious "
+        "incidents. Avoid for sensitive tasks.\n\n"
+        "This helps users compare hotspots at a glance when viewing maps or lists."
     ),
-    responses={
-        200: {"description": "List of all hotspots (enriched view)"},
-    }
+    responses={200: {"description": "List of all hotspots (enriched view)"}}
 )
 async def list_hotspots():
     db = await get_db()
     try:
         rows = await db.fetch("""
-            SELECT * 
+            SELECT *,
+                   ST_Y(geom_geog::geometry) AS lat,
+                   ST_X(geom_geog::geometry) AS lon
             FROM api.api_wifi_hotspot_risk
             ORDER BY city NULLS LAST, name NULLS LAST;
         """)
@@ -47,19 +52,19 @@ async def list_hotspots():
     "/search",
     summary="Search hotspots by name",
     description=(
-        "Performs a case-insensitive partial match search on hotspot names. "
-        "Useful for keyword-based discovery when the user types an area name, building name, "
-        "or partial SSID."
-    ),
-    responses={200: {"description": "Matching hotspot results"}}
+        "Performs a case‑insensitive match on hotspot names. "
+        "Useful when the user types an area name, building name, or partial SSID."
+    )
 )
 async def search_by_name(
-    name: str = Query(..., description="Partial match on hotspot name, e.g. `Civic`")
+    name: str = Query(..., description="Partial hotspot name, e.g. `Civic`")
 ):
     db = await get_db()
     try:
         rows = await db.fetch("""
-            SELECT *
+            SELECT *,
+                   ST_Y(geom_geog::geometry) AS lat,
+                   ST_X(geom_geog::geometry) AS lon
             FROM api.api_wifi_hotspot_risk
             WHERE name ILIKE '%' || $1 || '%'
             ORDER BY name;
@@ -72,11 +77,7 @@ async def search_by_name(
 @router.get(
     "/postcode",
     summary="Find hotspots by postcode prefix",
-    description=(
-        "Returns hotspots whose `postcode` begins with the given prefix. Useful when the app "
-        "knows a postcode (e.g., from user entry or device geolocation metadata)."
-    ),
-    responses={200: {"description": "Hotspots in the specified postcode prefix"}}
+    description="Filters hotspots whose postcode begins with the provided prefix."
 )
 async def search_by_postcode(
     postcode: str = Query(..., description="Postcode prefix, e.g. `LS1`")
@@ -84,7 +85,9 @@ async def search_by_postcode(
     db = await get_db()
     try:
         rows = await db.fetch("""
-            SELECT *
+            SELECT *,
+                   ST_Y(geom_geog::geometry) AS lat,
+                   ST_X(geom_geog::geometry) AS lon
             FROM api.api_wifi_hotspot_risk
             WHERE postcode ILIKE $1 || '%'
             ORDER BY postcode, name;
@@ -97,19 +100,17 @@ async def search_by_postcode(
 @router.get(
     "/city",
     summary="List hotspots in a city",
-    description=(
-        "Fetches hotspots in the specified **city** (case-insensitive)."
-        "Useful for city-wide filtering or populating local maps."
-    ),
-    responses={200: {"description": "Hotspots belonging to the specified city"}}
+    description="Returns hotspots for the specified city (case‑insensitive)."
 )
 async def search_by_city(
-    city: str = Query(..., description="Exact city name, e.g. `Leeds`")
+    city: str = Query(..., description="City name, e.g. `Leeds`")
 ):
     db = await get_db()
     try:
         rows = await db.fetch("""
-            SELECT *
+            SELECT *,
+                   ST_Y(geom_geog::geometry) AS lat,
+                   ST_X(geom_geog::geometry) AS lon
             FROM api.api_wifi_hotspot_risk
             WHERE LOWER(city) = LOWER($1)
             ORDER BY name;
@@ -120,93 +121,48 @@ async def search_by_city(
 
 
 # --------------------------------------------------------------
-# NEAREST (Single nearest point)
+# NEAREST / NEAR (PUBLIC)
 # --------------------------------------------------------------
 
-@router.get(
-    "/nearest",
-    summary="Find the closest hotspot",
-    description=(
-        "Performs a proximity search to return **the single nearest hotspot** "
-        "to the provided latitude and longitude. Uses PostGIS `ST_Distance` on an indexed "
-        "`geography` column for efficient spatial lookup."
-    ),
-    responses={
-        200: {"description": "The closest hotspot to the coordinates"},
-        422: {"description": "Invalid latitude/longitude"},
-    }
-)
-async def nearest(
-    lat: float = Query(..., description="Latitude (WGS84)"),
-    lon: float = Query(..., description="Longitude (WGS84)")
-):
+@router.get("/nearest")
+async def nearest(lat: float, lon: float):
     db = await get_db()
     try:
         rows = await db.fetch("""
             WITH q AS (
                 SELECT ST_SetSRID(ST_MakePoint($2, $1), 4326)::geography AS g
             )
-            SELECT h.*, ST_Distance(h.geom_geog, q.g) AS dist
+            SELECT h.*,
+                   ST_Y(h.geom_geog::geometry) AS lat,
+                   ST_X(h.geom_geog::geometry) AS lon,
+                   ST_Distance(h.geom_geog, q.g) AS dist
             FROM api.api_wifi_hotspot_risk h, q
             ORDER BY dist ASC
             LIMIT 1;
         """, lat, lon)
-
         return dict(rows[0]) if rows else {"message": "No hotspots found"}
     finally:
         await db.close()
 
 
-# --------------------------------------------------------------
-# NEAREST (K-NEAREST NEIGHBOURS — KNN)
-# --------------------------------------------------------------
-
-@router.get(
-    "/nearest/knn",
-    summary="Find the K nearest hotspots (KNN search)",
-    description=(
-        "Returns the **K closest hotspots** to the given coordinates using a "
-        "PostGIS K‑Nearest Neighbour (KNN) index‑assisted query via the `<->` distance operator. "
-        "This is significantly faster than computing distance for all hotspots, provided a GiST "
-        "index exists on `geom_geog`."
-    ),
-    responses={200: {"description": "Array of the K closest hotspots"}}
-)
-async def nearest_knn(
-    lat: float = Query(..., description="Latitude (WGS84)"),
-    lon: float = Query(..., description="Longitude (WGS84)"),
-    k: int = Query(5, ge=1, le=50, description="Number of nearest hotspots to return")
-):
+@router.get("/nearest/knn")
+async def nearest_knn(lat: float, lon: float, k: int = 5):
     rows = await models.get_hotspots_knn(lat, lon, k)
     return [dict(r) for r in rows]
 
 
-# --------------------------------------------------------------
-# RADIUS SEARCH
-# --------------------------------------------------------------
-
-@router.get(
-    "/near",
-    summary="Find hotspots within a radius",
-    description=(
-        "Returns all hotspots located within **N metres** of the provided coordinate. "
-        "Uses `ST_DWithin`, which is efficient on a `geography` column with a GiST index. "
-        "Ideal for 'hotspots near me' views."
-    ),
-    responses={200: {"description": "Hotspots within the specified radius"}}
-)
-async def hotspots_near(
-    lat: float = Query(..., description="Latitude (WGS84)"),
-    lon: float = Query(..., description="Longitude (WGS84)"),
-    radius: int = Query(500, ge=1, le=5000, description="Search radius in metres")
-):
+@router.get("/near")
+async def hotspots_near(lat: float, lon: float, radius: int = 500):
     db = await get_db()
     try:
         rows = await db.fetch("""
             WITH q AS (
-                SELECT ST_SetSRID(ST_MakePoint($2,$1), 4326)::geography AS g
+                SELECT ST_SetSRID(ST_MakePoint($2, $1), 4326)::geography AS g
             )
-            SELECT h.*, ST_Distance(h.geom_geog, q.g) AS dist
+            SELECT h.*,
+                   ST_Y(h.geom_geog::geometry) AS lat,
+                   ST_X(h.geom_geog::geometry) AS lon,
+                   ST_Distance(h.geom_geog, q.g) AS dist
             FROM api.api_wifi_hotspot_risk h, q
             WHERE ST_DWithin(h.geom_geog, q.g, $3)
             ORDER BY dist ASC;
@@ -217,18 +173,13 @@ async def hotspots_near(
 
 
 # --------------------------------------------------------------
-# PARTIAL UPDATES
+# ADMIN‑PROTECTED UPDATES
 # --------------------------------------------------------------
 
 @router.patch(
     "/{wifi_id}/status",
     summary="Update hotspot status",
-    description=(
-        "Updates the public‑facing operational **status** of a hotspot "
-        "(e.g. `Live`, `Planned`, `Suspended`). This modifies project metadata but does not "
-        "alter risk scores or geography."
-    ),
-    responses={200: {"description": "Status updated"}}
+    dependencies=[Depends(require_user)],
 )
 async def update_status(
     wifi_id: str,
@@ -241,12 +192,7 @@ async def update_status(
 @router.patch(
     "/{wifi_id}/security",
     summary="Update hotspot security mode",
-    description=(
-        "Updates the **security_protection** mode for a hotspot "
-        "(e.g. `open`, `wpa2`, `wpa3`). Used for correcting metadata or reflecting changes "
-        "from local authorities/operators."
-    ),
-    responses={200: {"description": "Security mode updated"}}
+    dependencies=[Depends(require_user)],
 )
 async def update_security(
     wifi_id: str,
@@ -257,7 +203,7 @@ async def update_security(
 
 
 # --------------------------------------------------------------
-# DETAILS (CACHED) — MUST BE LAST
+# DETAILS (PUBLIC)
 # --------------------------------------------------------------
 
 @router.get(
@@ -265,26 +211,35 @@ async def update_security(
     response_model=Hotspot,
     summary="Get hotspot details",
     description=(
-        "Returns the **complete enriched hotspot record**, including core metadata, "
-        "location, risk context, and computed fields. This endpoint uses a 5‑minute Redis cache "
-        "to reduce latency and database load."
-    ),
-    responses={
-        200: {"description": "Full hotspot details"},
-        404: {"description": "Hotspot not found"}
-    }
+        "Returns full hotspot details including:\n"
+        "- Basic metadata\n"
+        "- Security mode\n"
+        "- Crime exposure\n"
+        "- **Cyber Exposure Score** (0–100 risk indicator)\n"
+        "- Latitude/Longitude\n"
+    )
 )
 async def get_hotspot(wifi_id: str):
     key = f"hotspot:{wifi_id}"
     cached = await cache_get(key)
-
     if cached:
         return json.loads(cached)
 
-    row = await models.get_hotspot_by_wifi_id(wifi_id)
+    db = await get_db()
+    try:
+        row = await db.fetchrow("""
+            SELECT *,
+                   ST_Y(geom_geog::geometry) AS lat,
+                   ST_X(geom_geog::geometry) AS lon
+            FROM api.api_wifi_hotspot_risk
+            WHERE wifi_id = $1;
+        """, wifi_id)
+    finally:
+        await db.close()
 
     if not row:
         raise HTTPException(404, "Hotspot not found")
 
-    await cache_setex(key, 300, json.dumps(dict(row)))
-    return dict(row)
+    hotspot = dict(row)
+    await cache_setex(key, 300, json.dumps(hotspot))
+    return hotspot
