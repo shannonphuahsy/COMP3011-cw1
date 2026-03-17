@@ -1,14 +1,15 @@
 # app/main.py
-import app
+
 from fastapi import FastAPI, HTTPException
 from app.db.database import get_db
 
 # Routers
+from app.routers.internal import router as internal_router
 from app.routers.wifi_networks import router as wifi_router
 from app.routers.analytics import router as analytics_router
 from app.routers.incidents import router as incidents_router
 from app.routers.assessments import router as assess_router
-from app.routers.auth import router as auth_router
+from app.routers.auth import router as auth_router  # ← ADDED
 
 # SlowAPI
 from app.core.limiter import (
@@ -30,12 +31,12 @@ app = FastAPI(
 # -----------------------------------------
 # ROUTERS
 # -----------------------------------------
-app.include_router(auth_router)
+app.include_router(auth_router)       # ← ADDED
 app.include_router(wifi_router)
 app.include_router(analytics_router)
 app.include_router(incidents_router)
 app.include_router(assess_router)
-
+app.include_router(internal_router)
 
 # -----------------------------------------
 # HEALTH ENDPOINTS
@@ -44,6 +45,7 @@ app.include_router(assess_router)
 @app.get("/livez")
 async def livez():
     return {"status": "alive"}
+
 
 @app.get("/readyz")
 async def readyz():
@@ -54,6 +56,7 @@ async def readyz():
         return {"status": "ready"}
     except Exception:
         raise HTTPException(503, "not ready")
+
 
 @app.get("/healthz")
 def healthz():
