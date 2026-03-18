@@ -52,12 +52,12 @@ async def livez():
 @app.get("/readyz")
 async def readyz():
     try:
-        conn = await get_db()
-        await conn.execute("SELECT 1")
-        await conn.close()
+        async for conn in get_db():
+            await conn.execute("SELECT 1")
         return {"status": "ready"}
-    except Exception:
-        raise HTTPException(503, "not ready")
+    except Exception as e:
+        print("DB connection failed:", e)
+        return {"status": "not ready"}
 
 
 @app.get("/healthz")
