@@ -41,7 +41,9 @@ app.include_router(internal_router)
 # -----------------------------------------
 # HEALTH ENDPOINTS
 # -----------------------------------------
-
+@app.get("/")
+def root():
+    return {"message": "API is running"}
 @app.get("/livez")
 async def livez():
     return {"status": "alive"}
