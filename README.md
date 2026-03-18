@@ -162,7 +162,7 @@ The API exposes fully interactive documentation via FastAPI:
 
 ### **Tech Stack**
 
-| **Technology**           | **Purpose**                  | **Justification (Short)**                                                                                             |
+| **Technology**           | **Purpose**                  | **Justification**                                                                                             |
 | ------------------------ | ---------------------------- | --------------------------------------------------------------------------------------------------------------------- |
 | **FastAPI**              | Web framework                | High‑performance async framework with automatic OpenAPI docs and clean structure.                                     |
 | **PostgreSQL + PostGIS** | Database & geospatial engine | Provides reliable relational storage and powerful geospatial functions needed for crime radius and proximity queries. |
@@ -244,7 +244,7 @@ Confirms the app starts and responds correctly.
 
 ## 7. System Architecture
 
-Below is an ASCII diagram to ensure **GitHub renders it correctly**:
+Below is an ASCII diagram of the system architecture
 
                         ┌───────────────────────┐
                         │      API Client       │
