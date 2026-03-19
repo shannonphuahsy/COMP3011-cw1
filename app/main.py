@@ -1,7 +1,7 @@
 # app/main.py
 
 from fastapi import FastAPI, HTTPException
-from app.db.database import get_db, connect_to_db, disconnect_db
+from app.db.database import get_db, connect_to_db, disconnect_db, DATABASE_URL
 
 # Routers
 from app.routers.internal import router as internal_router
@@ -35,6 +35,8 @@ async def startup_event():
 @app.on_event("shutdown")
 async def shutdown_event():
     await disconnect_db()
+
+    print("DATABASE_URL =", DATABASE_URL)
 # -----------------------------------------
 # ROUTERS
 # -----------------------------------------
