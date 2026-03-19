@@ -112,7 +112,6 @@ It is capable of:
       ├── clean_ons_dataset.py 
       ├── merge_crime_datasets.py
       └── merge_wifi_datasets.py
-    .coverage
     .env
     .env.example    
     .gitattributes
