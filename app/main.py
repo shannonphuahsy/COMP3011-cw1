@@ -1,7 +1,7 @@
 # app/main.py
 
 from fastapi import FastAPI, HTTPException
-from app.db.database import get_db, connect_to_db, disconnect_db, DATABASE_URL
+from app.db.database import get_db, connect_to_db, DATABASE_URL, disconnect_db
 
 # Routers
 from app.routers.internal import router as internal_router
