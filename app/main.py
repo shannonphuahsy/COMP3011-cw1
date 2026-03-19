@@ -1,7 +1,7 @@
 # app/main.py
 
 from fastapi import FastAPI, HTTPException
-from app.db.database import get_db
+from app.db.database import get_db, connect_to_db, disconnect_db
 
 # Routers
 from app.routers.internal import router as internal_router
@@ -28,6 +28,13 @@ app = FastAPI(
     version="1.0.0",
 )
 
+@app.on_event("startup")
+async def startup_event():
+    await connect_to_db()
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    await disconnect_db()
 # -----------------------------------------
 # ROUTERS
 # -----------------------------------------
