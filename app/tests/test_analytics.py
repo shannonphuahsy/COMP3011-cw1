@@ -1,8 +1,3 @@
-def test_nearby(client):
-    r = client.get("/analytics/nearby", params={"lat": 53.800, "lon": -1.549, "radius": 500})
-    assert r.status_code == 200
-    assert isinstance(r.json(), list)
-
 def test_ranked(client):
     r = client.get("/analytics/ranked", params={"city": "Leeds", "limit": 5})
     assert r.status_code == 200

@@ -43,7 +43,6 @@ It is capable of:
 *   Assessing network security posture (Open/WPA2/WPA3)
 *   Detecting SSID spoofing likelihood
 *   Collecting and analysing user‑reported incidents
-*   Resolving hotspot identity via BSSID
 *   Computing a unified **0–100 Cyber Exposure Score**
 *   Providing both public endpoints and admin‑restricted operations
 
