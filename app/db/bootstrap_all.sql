@@ -441,4 +441,7 @@ VALUES (
 )
 ON CONFLICT (wifi_id) DO NOTHING;
 
-VACUUM FULL;
+SELECT pg_size_pretty(pg_database_size(current_database())) AS db_size;
+
+VACUUM (FULL, ANALYZE);
+
