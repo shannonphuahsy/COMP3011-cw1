@@ -1,40 +1,49 @@
 # COMP3011‑cw1
 ***
+# Geospatial Risk Analysis for Public WiFi Networks
 
-## 1. Project Title
+*A Cyber‑Exposure Scoring & Hotspot Intelligence API*
 
-## **Geospatial Risk Analysis for Public WiFi Networks**
+***
+
+#  Table of Contents
+
+*   1.  Project Title
+*   2.  Overview
+*   3.  Live Documentation
+*   4.  Key Features
+*   5.  Design Decisions & Tech Stack
+*   6.  Deployment
+*   7.  Setup & Installation
+*   8.  Database Schema
+*   9.  Data Sources & Justification
+*   10. System Architecture
+*   11. Authentication & Authorization
+*   12. How to Use the API
+*   13. API Endpoints
+*   14. Cyber Exposure Score
+*   15. Caching Strategy
+*   16. Rate Limiting
+*   17. Testing
+*   18. Error Codes & Debugging Guide
+*   19. Project Structure
+*   20. Design Trade-offs & Challenges
+*   21. Limitations
+*   22. Future Work
+*   23. References
+
+***
+
+# 1. Project Title
+
+# **Geospatial Risk Analysis for Public WiFi Networks**
 
 Real‑time hotspot intelligence, cyber‑exposure scoring, and risk analytics.
 
 ***
 
-## 2. Table of Contents
-### I. Overview
-### II. Live Documentation
-### III. Key Features
-### IV. Design Decisions & Tech Stack
-### V. System Architecture
-### VI. Setup Instructions
-### VII. Database Schema
-### VIII. Authentication & Authorization
-### IX. API Endpoints
-#### - Hotspots
-#### - Assessments
-#### - Analytics
-#### - Incidents
-#### - Internal Admin
-### X. Cyber Exposure Score
-### XI. Caching Strategy
-### XII. Rate Limiting
-### XIII. Testing
-### XIV. Project Structure
-### XV. Design Trade‑offs & Challenges
-### XVI. Limitations
-### XVII. Future Work
-### XVIII. References
-***
-## 3. Overview
+# 2. Overview
+
 
 This project implements a **Geospatial Risk Analysis API** for public Wi‑Fi networks.  
 It is capable of:
@@ -53,18 +62,6 @@ It is capable of:
       │     ├── __init__.py
       │     ├── config.py
       │     └── limiter.py
-      ├── data/
-      │     └── clean_data/
-      │           ├── crime_hotspot_cities_clean.csv
-      │           ├── dim_postcode.csv
-      │           ├── lsoa_2021_locations_minimal.csv
-      │           ├── lsoa_context_2021.csv
-      │           ├── lsoa_population_summary_2021.csv
-      │           └── wifi_hotspots_clean.csv
-      │     └── crime_raw
-      │           └── ...
-      │     ├── LSOA.xlsx
-      │     └── LSOA (2).xlsx
       ├── db/ 
       │     ├── __init__.py
       │     ├── bootstrap_all.sql
@@ -121,23 +118,15 @@ It is capable of:
     requirements-dev.txt 
 ***
 
-## 4. Live Documentation
+# 3. Live Documentation
 
-The API exposes fully interactive documentation via FastAPI:
-
-*   **Swagger UI**  
-    `http://localhost:8000/docs`
-
-*   **ReDoc**  
-    `http://localhost:8000/redoc`
-
-*   **OpenAPI Spec**  
-    `http://localhost:8000/openapi.json`
+*   **Swagger UI:** <http://localhost:8000/docs>
+*   **ReDoc:** <http://localhost:8000/redoc>
+*   **OpenAPI Spec:** <http://localhost:8000/openapi.json>
 
 ***
 
-## 5. Key Features
-
+# 4. Key Features
 *   **Wi‑Fi hotspot browsing & search** (name, city, postcode)
 *   **Geospatial analysis** (nearest, near radius, KNN)
 *   **Security posture evaluation** (Open/WPA2/WPA3)
@@ -145,14 +134,12 @@ The API exposes fully interactive documentation via FastAPI:
 *   **SSID spoofing classification**
 *   **Crime analytics (12‑month, 500m)**
 *   **Cyber Exposure Score (0–100)**
-*   **Caching layer** for hotspot details
 *   **API key–secured internal endpoints**
 *   **Comprehensive pytest suite**
 *   **Rate‑limited assessment endpoints**
-
 ***
 
-## 6. Design Decisions & Tech Stack
+# 5. Design Decisions & Tech Stack
 
 ### **Programming Language**
 
@@ -170,7 +157,7 @@ The API exposes fully interactive documentation via FastAPI:
 
 ### **Database**
 
-**PostgreSQL 15 + PostGIS**  
+**PostgreSQL 18 + PostGIS**  
 Chosen due to:
 
 *   Geospatial types (`geography`, `geometry`)
@@ -184,12 +171,6 @@ Chosen due to:
 *   Very fast
 *   Full async support
 *   Lower overhead than SQLAlchemy ORM
-
-### **Caching**
-
-*   Redis originally planned
-*   Disabled for Windows compatibility
-*   Cache adapter gracefully no‑ops when Redis is unavailable
 
 ### **Authentication**
 
@@ -237,11 +218,125 @@ Confirms the app starts and responds correctly.
 *   Temporary test users are cleaned before each test.
 *   Hotspot updates use backup/restore fixtures.
 *   Caching is bypassed during tests to avoid stale data.
+***
+
+# 6. Deployment
+
+**This section is in progress.**  
+A placeholder for:
+
+*   Docker deployment
+*   Railway/Render deployment
+*   Systemd service setup
+*   Production environment variables
+*   SSL certificates / reverse proxy
 
 ***
 
-## 7. System Architecture
+# 7. Setup & Installation
 
+### **Prerequisites**
+
+*   Python **3.11+**
+*   PostgreSQL **18** with **PostGIS**
+*   (Optional) Redis
+
+### **Installation**
+
+```bash
+pip install -r requirements.txt
+```
+
+### **Environment Variables**
+
+Copy `.env.example` → `.env`:
+
+    DATABASE_URL=postgres://...
+    JWT_SECRET=your_secret
+    API_KEY=admin_key
+
+### **Run the Server**
+
+```bash
+uvicorn app.main:app --reload
+```
+
+### **Run Tests**
+
+```bash
+pytest -q
+```
+
+***
+
+# 8. Database Schema
+
+The system uses a clean, normalised schema:
+
+### **Tables**
+
+*   `core_wifi_hotspot`: Raw hotspot rows
+*   `api_wifi_hotspot_risk`: Enriched hotspot + geospatial fields
+*   `api_wifi_bssid_map`: Maps BSSID → wifi\_id
+*   `api_user_incidents`: User‑reported incidents
+*   `core_crime`: Geospatial crime dataset
+
+### **Relationships**
+
+*   Hotspot → Crime is computed via geospatial radius, not FK
+*   Hotspot → Incidents uses `wifi_id`
+*   BSSID → Hotspot uses 1:N mapping
+***
+
+# 9. Data Sources 
+
+### **Summary**
+
+This API is built using a creative, multi‑dataset, geospatially‑aware pipeline that combines:
+
+*   Public Wi‑Fi datasets (multiple councils)
+*   Police crime data
+*   ONS Postcode Directory
+*   LSOA boundaries & population
+*   Derived merged LSOA context (device density, area, geometry)
+
+### **9.1 Wi-Fi Hotspot Datasets**
+Includes UK councils such as:
+*   Leeds Free WiFi
+*   Leicester Public WiFi
+*   Calderdale Public WiFi
+*   Camden Public WiFi
+*   Cambridgeshire Public WiFi
+
+### **9.2 Crime Dataset — UK Police**
+
+Provides:
+*   Geolocated crime points
+*   LSOA codes for normalisation
+***
+
+### **9.3 ONS Postcode Directory**
+Crosswalk that maps:
+*   Postcode → LSOA → Ward → Authority
+***
+
+### **9.4 LSOA Boundaries & Geometry**
+Provides:
+*   Area
+*   Polygons
+*   Centroids
+***
+
+### **9.5 LSOA Population**
+Population density → device density → risk of opportunistic cyber events.
+***
+
+### **9.6 Merged LSOA Context Dataset**
+A custom ETL product combining all of the above.
+
+***
+
+# 10. System Architecture
 Below is an ASCII diagram of the system architecture
 
                         ┌───────────────────────┐
@@ -266,122 +361,156 @@ Below is an ASCII diagram of the system architecture
 
 ***
 
-## 8. Setup Instructions
+# 11. Authentication & Authorization
 
-### **Prerequisites**
+### **JWT Authentication**
 
-*   Python **3.11+**
-*   PostgreSQL **15** with **PostGIS**
-*   Optional: Redis (disabled by default on Windows)
+Used for:
 
-### **Install dependencies**
+*   `/incidents` CRUD
+*   Admin hotspot updates
 
-    pip install -r requirements.txt
+### **API Key Authentication**
 
-### **Run the server**
+Used for:
 
-    uvicorn app.main:app --reload
-
-### **Run tests**
-
-    pytest -q
-
-### **Environment variables**
-
-Copy `.env.example` → `.env` and set:
-
-    DATABASE_URL=
-    JWT_SECRET=
-    API_KEY=
+*   `/internal/stats`
+*   `/internal/version`
 
 ***
 
-## 9. Database Schema
+# 12. How to Use the API
 
-The system uses a clean, normalised schema:
+### 1. **Signup**
 
-### **Tables**
+```bash
+POST /auth/signup
+```
 
-*   `core_wifi_hotspot`: Raw hotspot rows
-*   `api_wifi_hotspot_risk`: Enriched hotspot + geospatial fields
-*   `api_wifi_bssid_map`: Maps BSSID → wifi\_id
-*   `api_user_incidents`: User‑reported incidents
-*   `core_crime`: Geospatial crime dataset
+### 2. **Login**
 
-### **Relationships**
+```bash
+POST /auth/login
+```
 
-*   Hotspot → Crime is computed via geospatial radius, not FK
-*   Hotspot → Incidents uses `wifi_id`
-*   BSSID → Hotspot uses 1:N mapping
+Response:
 
-***
+```json
+{ "access_token": "..." }
+```
 
-## 10. Authentication & Authorization
-
-### **JWT Endpoints**
-
-*   **POST `/auth/signup`**
-*   **POST `/auth/login`**
-
-Header:
+### 3. **Use the Token**
 
     Authorization: Bearer <token>
 
-### **Protected Endpoints**
+### 4. **Make Requests**
 
-*   Incidents CRUD
-*   Hotspot updates (`status`, `security`)
+Examples:
 
-### **Internal Admin (API key)**
+```bash
+GET /hotspots/search?name=library
+GET /assessments/safety?ssid=FreeWifi&lat=53.8&lon=-1.55
+POST /incidents/?wifi_id=abc123&description=Suspicious activity
+```
 
-*   `/internal/stats`
-*   `/internal/version`
+***
+
+# 13. API Endpoints
+
+Absolutely — here is the **API Endpoints section rewritten in clean README‑friendly Markdown**, ready to paste directly into your `README.md`.
+
+All formatting is Markdown‑native, with headings, tables, spacing, and structure that GitHub will render perfectly.
+
+***
+
+# **13. API Endpoints**
+
+Below is the complete list of endpoints, fully aligned with the **API Documentation**.
+
+***
+
+## **Hotspot Endpoints (Public)**
+
+| Method    | Endpoint                                            | Description                                     |
+| --------- | --------------------------------------------------- | ----------------------------------------------- |
+| **GET**   | `/hotspots/`                                        | Return all Wi‑Fi hotspots.                      |
+| **GET**   | `/hotspots/{wifi_id}`                               | Return full details for a specific hotspot.     |
+| **GET**   | `/hotspots/search?name=`                            | Search hotspots by name (case‑insensitive).     |
+| **GET**   | `/hotspots/city?city=`                              | Filter hotspots by city.                        |
+| **GET**   | `/hotspots/nearest?lat=&lon=`                       | Return the nearest hotspot to a location.       |
+| **GET**   | `/hotspots/nearest/knn?lat=&lon=&k=`                | Return the *k* nearest hotspots.                |
+| **GET**   | `/hotspots/near?lat=&lon=&radius=`                  | Return hotspots within a radius (meters).       |
+| **PATCH** | `/hotspots/{wifi_id}/status?status=`                | Update hotspot status (Admin‑only, JWT).        |
+| **PATCH** | `/hotspots/{wifi_id}/security?security_protection=` | Update hotspot security mode (Admin‑only, JWT). |
+
+***
+
+## **Assessment Endpoints (Public)**
+
+These endpoints evaluate network security, crime exposure, spoofing, and produce the final cyber‑exposure score.
+
+| Method  | Endpoint                                   | Description                                         |
+| ------- | ------------------------------------------ | --------------------------------------------------- |
+| **GET** | `/assessments/security?ssid=&lat=&lon=`    | Evaluate hotspot security level.                    |
+| **GET** | `/assessments/crime?ssid=&lat=&lon=`       | Retrieve crime incidents within hotspot vicinity.   |
+| **GET** | `/assessments/incidents?ssid=&lat=&lon=`   | Retrieve historical user‑reported incidents.        |
+| **GET** | `/assessments/ssid_risk?ssid=&lat=&lon=`   | Detect likelihood of SSID spoofing.                 |
+| **GET** | `/assessments/environment?ssid=&lat=&lon=` | Return environmental/venue context.                 |
+| **GET** | `/assessments/safety?ssid=&lat=&lon=`      | Compute the final **Cyber Exposure Score (0–100)**. |
+
+***
+
+## **Analytics Endpoints (Public)**
+
+| Method  | Endpoint                         | Description                                    |
+| ------- | -------------------------------- | ---------------------------------------------- |
+| **GET** | `/analytics/ranked?city=&limit=` | Rank hotspots by cyber exposure score.         |
+| **GET** | `/analytics/crime/{wifi_id}`     | Retrieve crime metrics for a specific hotspot. |
+
+> **Note:** `/analytics/nearby` does **not** exist in the final API specification.
+
+***
+
+## **Incident Endpoints (JWT Required)**
+
+| Method     | Endpoint                                   | Description                       |
+| ---------- | ------------------------------------------ | --------------------------------- |
+| **POST**   | `/incidents/?wifi_id=&bssid=&description=` | Create a new incident report.     |
+| **GET**    | `/incidents/{wifi_id}`                     | List all incidents for a hotspot. |
+| **PATCH**  | `/incidents/{incident_id}?description=`    | Update an existing incident.      |
+| **DELETE** | `/incidents/{incident_id}`                 | Delete an incident.               |
+
+Authentication header:
+
+    Authorization: Bearer <jwt-token>
+
+***
+
+##**Internal Admin Endpoints (API Key Required)**
+
+| Method  | Endpoint            | Description                                       |
+| ------- | ------------------- | ------------------------------------------------- |
+| **GET** | `/internal/stats`   | System statistics and internal telemetry.         |
+| **GET** | `/internal/version` | API version, PostgreSQL version, PostGIS version. |
 
 Header:
 
-    X-API-Key: <your key>
+    X-API-Key: <your-key>
 
 ***
 
-## 11. API Endpoints
+## **System Health Endpoints**
 
-Create a table in your final submission (example):
-
-### Hotspots
-
-*   `/hotspots/`
-*   `/hotspots/{wifi_id}`
-*   `/hotspots/search`
-*   `/hotspots/nearest`
-*   `/hotspots/near`
-
-### Assessments
-
-*   `/assessments/security`
-*   `/assessments/crime`
-*   `/assessments/incidents`
-*   `/assessments/ssid_risk`
-*   `/assessments/environment`
-*   `/assessments/safety` (final composite)
-
-### Analytics
-
-*   `/analytics/nearby`
-*   `/analytics/ranked`
-*   `/analytics/crime/{wifi_id}`
-
-### Incidents (JWT)
-
-*   Create, update, delete, list
-
-### Internal Admin (API key)
-
-*   `/internal/stats`
-*   `/internal/version`
+| Method  | Endpoint   | Description                           |
+| ------- | ---------- | ------------------------------------- |
+| **GET** | `/livez`   | Service liveness probe.               |
+| **GET** | `/readyz`  | Readiness probe (database available). |
+| **GET** | `/healthz` | General system status.                |
 
 ***
 
-## 12. Cyber Exposure Score
+# 14. Cyber Exposure Score
+
 
 A single **0–100** metric summarising hotspot safety.
 
@@ -413,90 +542,64 @@ A single **0–100** metric summarising hotspot safety.
 
 ***
 
-## 13. Caching Strategy
-
-*   `/hotspots/{wifi_id}` cached for 300 seconds
-*   Redis optional
-*   Automatic fallback to no‑cache on unsupported platforms
-*   Prevents repeated PostGIS calls
-
-***
-
-## 14. Rate Limiting
+# 17. Rate Limiting
 
 Assessment endpoints are protected:
 
     30 requests / minute per IP
 
 This prevents automated hotspot scanning.
-
 ***
 
-## 15. Testing
+# 18. Testing
 
-The test suite verifies:
+### Run the test suite:
 
-*   JWT authentication
-*   API key authentication
-*   Hotspot search & geospatial endpoints
-*   Incidents CRUD
-*   Safety assessment format
+```bash
+pytest -q
+```
+
+### Tests include:
+
+*   JWT auth
+*   API key checks
+*   Hotspot geospatial operations
+*   Assessment scoring
 *   Internal diagnostics
-
-Run with:
-
-    pytest -q
-
-Fixtures include DB cleanup to prevent duplicate user errors.
+*   OpenAPI contract stability
 
 ***
 
-## 16. Project Structure
+# 18. Error Codes & Debugging Guide
 
-    app/
-      routers/
-      services/
-      db/
-      schemas/
-      cache.py
-      main.py
-    tests/
-      test_auth.py
-      test_incidents_crud.py
-      test_wifi_patch.py
-      ...
+| Status  | Meaning             | Common Causes                   |
+| ------- | ------------------- | ------------------------------- |
+| **400** | Bad Request         | Invalid parameters              |
+| **401** | Unauthorized        | Missing/invalid JWT             |
+| **403** | Forbidden           | Missing API key                 |
+| **404** | Not Found           | Invalid wifi\_id / no incidents |
+| **409** | Conflict            | Duplicate signup                |
+| **422** | Validation error    | Wrong types, missing fields     |
+| **500** | Server error        | Uncaught exceptions             |
+| **503** | Service unavailable | DB offline                      |
 
-***
+### **Windows Issues & Fixes**
 
-## 17. Design Trade‑offs & Challenges
+**Problem:** Redis unavailable  
+**Fix:** System gracefully degrades to no‑op cache.
 
-*   Redis removed for Windows compatibility
-*   Materialized view refresh removed for performance
-*   Score model simplified due to coursework constraints
-*   PostGIS operations tuned for speed, not ultimate accuracy
+**Problem:** PostGIS installation  
+Use Postgres installer with PostGIS bundle.
 
-***
+**Problem:** Long filepaths\*\*  
+Enable:
 
-## 18. Limitations
-
-*   Static crime dataset
-*   No frontend or visual dashboard
-*   Score is heuristic, not ML‑driven
-*   No real‑time threat feeds
+    HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\FileSystem\LongPathsEnabled = 1
 
 ***
 
-## 19. Future Work
+# 23. References
 
-*   Live cyber‑threat intelligence integration
-*   ML anomaly detection
-*   GeoJSON export endpoints
-*   Public dashboard UI
-*   Automated materialized view pipeline
-
-***
-
-## 20. References
 
 ### Documentation
 
@@ -524,4 +627,3 @@ Fixtures include DB cleanup to prevent duplicate user errors.
 
 ***
 
-If you want, I can **generate a PDF** of this README or produce a **short summary version for your coursework report** — just tell me!
