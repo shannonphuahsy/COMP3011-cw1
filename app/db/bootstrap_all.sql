@@ -40,7 +40,7 @@ CREATE TABLE IF NOT EXISTS core.core_wifi_hotspot (
 ------------------------------------------------------------
 -- CRIME TABLE
 ------------------------------------------------------------
-CREATE TABLE core.core_crime (
+CREATE TABLE IF NOT EXISTS core.core_crime (
   id            bigserial PRIMARY KEY,
   crime_id      text,
   month         text,     -- ← import as text
@@ -57,9 +57,6 @@ CREATE TABLE core.core_crime (
   geom_geog     geography(Point, 4326)
 );
 
-ALTER TABLE core.core_crime
-ADD COLUMN crime_date date;
-
 UPDATE core.core_crime
 SET crime_date =
     CASE
@@ -69,7 +66,8 @@ SET crime_date =
         ELSE NULL
     END;
 
-CREATE INDEX idx_crime_crimedate ON core.core_crime (crime_date);
+
+
 ------------------------------------------------------------
 -- POSTCODE DIRECTORY
 ------------------------------------------------------------
@@ -192,7 +190,6 @@ CREATE INDEX IF NOT EXISTS idx_postcode_lsoa ON core.core_postcode (lsoa_2021);
 ------------------------------------------------------------
 -- CREATE API VIEWS
 ------------------------------------------------------------
-
 CREATE OR REPLACE VIEW api.api_wifi_hotspot_enriched AS
 SELECT
   w.*,
@@ -440,8 +437,4 @@ VALUES (
     ST_SetSRID(ST_MakePoint(-1.549, 53.800), 4326)::geography
 )
 ON CONFLICT (wifi_id) DO NOTHING;
-
-SELECT pg_size_pretty(pg_database_size(current_database())) AS db_size;
-
-VACUUM (FULL, ANALYZE);
 

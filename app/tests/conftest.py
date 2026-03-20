@@ -18,17 +18,12 @@ TEST_USERS = [
 ]
 
 
-# -------------------------------
-# Sync client
-# -------------------------------
+
 @pytest.fixture(scope="session")
 def client():
     return TestClient(app)
 
 
-# -------------------------------
-# Async client
-# -------------------------------
 @pytest.fixture
 async def async_client():
     async with AsyncClient(
@@ -38,9 +33,6 @@ async def async_client():
         yield ac
 
 
-# -------------------------------
-# DB connection
-# -------------------------------
 @pytest.fixture
 async def pg_conn():
     dsn = os.getenv("DATABASE_URL")
@@ -54,9 +46,6 @@ async def pg_conn():
         await conn.close()
 
 
-# -------------------------------
-# CLEANUP BEFORE EVERY TEST
-# -------------------------------
 @pytest.fixture(autouse=True)
 async def cleanup_users(pg_conn):
     """Remove test users before every test to avoid unique errors."""
@@ -67,9 +56,6 @@ async def cleanup_users(pg_conn):
         await pg_conn.execute("DELETE FROM auth_user WHERE email=$1;", email)
 
 
-# -------------------------------
-# wifi_id
-# -------------------------------
 @pytest.fixture
 async def any_wifi_id(pg_conn):
     row = await pg_conn.fetchrow(
@@ -80,9 +66,6 @@ async def any_wifi_id(pg_conn):
     return row["wifi_id"]
 
 
-# -------------------------------
-# mapped BSSID
-# -------------------------------
 @pytest.fixture
 async def mapped_bssid(pg_conn, any_wifi_id):
     bssid = "AA:BB:CC:DD:EE:99"
@@ -98,9 +81,7 @@ async def mapped_bssid(pg_conn, any_wifi_id):
         await pg_conn.execute("DELETE FROM api.api_wifi_bssid_map WHERE bssid=$1;", bssid)
 
 
-# -------------------------------
-# AUTH FIXTURES (NO duplicates)
-# -------------------------------
+
 @pytest.fixture
 def auth_headers(client):
     email = "testuser@example.com"
@@ -125,17 +106,11 @@ async def auth_headers_async(async_client):
     return {"Authorization": f"Bearer {token}"}
 
 
-# -------------------------------
-# API key
-# -------------------------------
 @pytest.fixture
 def internal_headers():
     return {"X-API-Key": API_KEY}
 
 
-# -------------------------------
-# PATCH backup/restore
-# -------------------------------
 @contextlib.asynccontextmanager
 async def _backup_and_restore(conn, wifi_id, field):
     row = await conn.fetchrow(

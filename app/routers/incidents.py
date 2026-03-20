@@ -10,10 +10,6 @@ router = APIRouter(
     tags=["Incidents"]
 )
 
-# --------------------------------------------------------------
-# CREATE INCIDENT  (NOW USING QUERY PARAMETERS)
-# --------------------------------------------------------------
-
 @router.post(
     "/",
     status_code=status.HTTP_201_CREATED,
@@ -44,10 +40,6 @@ async def create_incident_route(
     )
     return dict(row)
 
-
-# --------------------------------------------------------------
-# LIST INCIDENTS FOR A HOTSPOT  (PUBLIC — UNCHANGED)
-# --------------------------------------------------------------
 
 @router.get(
     "/{wifi_id}",

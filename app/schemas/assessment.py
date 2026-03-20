@@ -17,8 +17,6 @@ class SafetyAssessment(BaseModel):
     """
     The complete Wi‑Fi safety assessment model returned by the unified endpoint.
     """
-
-    # ⭐⭐ THE IMPORTANT PART — allows risk_score and other extra fields ⭐⭐
     model_config = ConfigDict(extra="allow")
 
     wifi_id: str = Field(..., description="Identifier of the matched hotspot from the database.")

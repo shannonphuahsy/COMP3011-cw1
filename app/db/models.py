@@ -4,10 +4,6 @@ from typing import Any, Dict, List, Optional
 from app.db.database import get_db
 from app.services.scoring import compute_score  # NEW
 
-# ============================================================
-# BSSID → WiFi lookup
-# ============================================================
-
 async def get_wifi_id_from_bssid(bssid: str) -> Optional[str]:
     db = await get_db()
     try:
@@ -18,11 +14,6 @@ async def get_wifi_id_from_bssid(bssid: str) -> Optional[str]:
         return row["wifi_id"] if row else None
     finally:
         await db.close()
-
-
-# ============================================================
-# Hotspot lookups / updates
-# ============================================================
 
 async def get_hotspot_by_wifi_id(wifi_id: str):
     db = await get_db()
@@ -60,10 +51,6 @@ async def update_hotspot_security(wifi_id: str, sec: str) -> None:
         await db.close()
 
 
-# ============================================================
-# NEW: Cyber Exposure Score update
-# ============================================================
-
 async def update_cyber_score(wifi_id: str, score: int) -> None:
     """
     Updates cyber_exposure_score stored in the core table.
@@ -83,10 +70,6 @@ async def update_cyber_score(wifi_id: str, score: int) -> None:
         await db.close()
 
 
-# ============================================================
-# NEW: Get ALL hotspots (for automated scoring)
-# ============================================================
-
 async def get_all_hotspots():
     db = await get_db()
     try:
@@ -95,16 +78,7 @@ async def get_all_hotspots():
     finally:
         await db.close()
 
-
-# ============================================================
-# NEW: Recompute Cyber Scores (batch update)
-# ============================================================
-
 async def refresh_cyber_scores():
-    """
-    Recompute cyber_exposure_score for ALL hotspots using compute_score(),
-    and update the core table.
-    """
     hotspots = await get_all_hotspots()
 
     for hotspot in hotspots:
@@ -128,11 +102,6 @@ async def refresh_cyber_scores():
         # Save update
         await update_cyber_score(wifi_id, assessment.score)
 
-
-# ============================================================
-# Crime context
-# ============================================================
-
 async def get_crime_count(wifi_id: str) -> int:
     db = await get_db()
     try:
@@ -144,10 +113,6 @@ async def get_crime_count(wifi_id: str) -> int:
     finally:
         await db.close()
 
-
-# ============================================================
-# Incidents (CRUD)
-# ============================================================
 
 async def create_incident(wifi_id: str, bssid: str, desc: str):
     db = await get_db()
@@ -204,11 +169,6 @@ async def delete_incident(incident_id: int) -> None:
     finally:
         await db.close()
 
-
-# ============================================================
-# Proximity / Discovery
-# ============================================================
-
 async def get_hotspots_near(lat: float, lon: float, radius: int):
     db = await get_db()
     try:
@@ -251,10 +211,6 @@ async def get_ranked_hotspots(city: str, limit: int = 50):
         await db.close()
 
 
-# ============================================================
-# KNN (Top-K)
-# ============================================================
-
 async def get_hotspots_knn(lat: float, lon: float, k: int):
     db = await get_db()
     try:
@@ -277,9 +233,7 @@ async def get_hotspots_knn(lat: float, lon: float, k: int):
         await db.close()
 
 
-# ============================================================
-# Resolution Helpers
-# ============================================================
+
 
 async def get_nearest_hotspot(lat: float, lon: float):
     db = await get_db()
@@ -324,10 +278,6 @@ async def get_nearest_hotspot_by_ssid(lat: float, lon: float, ssid: str):
     finally:
         await db.close()
 
-
-# ============================================================
-# Spoof-risk heuristic
-# ============================================================
 
 async def detect_basic_spoof_risk(
     wifi_id: str,

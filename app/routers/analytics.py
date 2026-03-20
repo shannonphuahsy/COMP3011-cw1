@@ -5,10 +5,6 @@ from app.db import models
 
 router = APIRouter(prefix="/analytics", tags=["Analytics"])
 
-# --------------------------------------------------------------
-# RANKED HOTSPOTS
-# --------------------------------------------------------------
-
 @router.get(
     "/ranked",
     summary="Top hotspots by exposure score (per city)",
@@ -39,11 +35,6 @@ async def ranked(
 ):
     rows = await models.get_ranked_hotspots(city, limit)
     return [dict(r) for r in rows]
-
-
-# --------------------------------------------------------------
-# CRIME COUNT
-# --------------------------------------------------------------
 
 @router.get(
     "/crime/{wifi_id}",

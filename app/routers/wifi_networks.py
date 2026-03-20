@@ -8,10 +8,6 @@ from asyncpg import Connection  # type hint for the DB connection
 
 router = APIRouter(prefix="/hotspots", tags=["WiFi"])
 
-# --------------------------------------------------------------
-# DISCOVERY ENDPOINTS (ALL PUBLIC)
-# --------------------------------------------------------------
-
 @router.get(
     "/",
     summary="List all WiFi hotspots",
@@ -72,10 +68,6 @@ async def search_by_city(
     return [dict(r) for r in rows]
 
 
-# --------------------------------------------------------------
-# NEAREST / NEAR (PUBLIC)
-# --------------------------------------------------------------
-
 @router.get(
     "/nearest",
     summary="Find nearest hotspot",
@@ -130,10 +122,6 @@ async def hotspots_near(
         ORDER BY dist ASC;
     """, lat, lon, radius)
     return [dict(r) for r in rows]
-
-# --------------------------------------------------------------
-# ADMIN‑PROTECTED UPDATES
-# --------------------------------------------------------------
 
 @router.patch(
     "/{wifi_id}/status",

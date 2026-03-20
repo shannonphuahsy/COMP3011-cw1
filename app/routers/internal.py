@@ -12,9 +12,6 @@ router = APIRouter(
 
 START_TIME = time.time()
 
-# --------------------------------------------------------------
-# 1. SYSTEM STATISTICS
-# --------------------------------------------------------------
 
 @router.get("/stats", dependencies=[Depends(require_api_key)])
 async def internal_stats():
@@ -37,9 +34,6 @@ async def internal_stats():
         "uptime_seconds": uptime,
     }
 
-# --------------------------------------------------------------
-# 2. VERSION INFO
-# --------------------------------------------------------------
 @router.get("/version", dependencies=[Depends(require_api_key)])
 async def version_info():
     # Get API version dynamically from package metadata

@@ -17,9 +17,7 @@ def compute_score(
     reasons: List[Reason] = []
     points: int = 0
 
-    # --------------------------------------------------------
-    # 1. Security Posture (most important)
-    # --------------------------------------------------------
+
     sec = (hotspot.get("security_protection") or "").lower()
 
     if sec == "open":
@@ -54,9 +52,6 @@ def compute_score(
         ))
         points += 15
 
-    # --------------------------------------------------------
-    # 2. Incidents (community-driven signal)
-    # --------------------------------------------------------
     if recent_incidents:
         reasons.append(Reason(
             code="INCIDENT_HISTORY",
@@ -65,9 +60,6 @@ def compute_score(
         ))
         points += 15
 
-    # --------------------------------------------------------
-    # 3. Crime Context
-    # --------------------------------------------------------
     if crime_count >= 20:
         reasons.append(Reason(
             code="HIGH_CRIME_AREA",
@@ -83,9 +75,7 @@ def compute_score(
         ))
         points += 5
 
-    # --------------------------------------------------------
-    # 4. SSID Spoofing Risk
-    # --------------------------------------------------------
+
     if ssid:
         s_lower = ssid.lower()
         common_spoof_targets = ["free", "public", "guest", "wifi", "airport", "hotel"]
@@ -118,9 +108,6 @@ def compute_score(
         ))
         points += 10
 
-    # --------------------------------------------------------
-    # 6. Distance anomaly (evil‑twin heuristic)
-    # --------------------------------------------------------
     if distance is not None:
         if distance > 30:
             reasons.append(Reason(
@@ -130,9 +117,6 @@ def compute_score(
             ))
             points += 10
 
-    # --------------------------------------------------------
-    # 7. Client-side mitigations (VPN / HTTPS-only)
-    # --------------------------------------------------------
     if client_hints.get("vpn"):
         reasons.append(Reason(
             code="VPN_ACTIVE",
@@ -149,9 +133,6 @@ def compute_score(
         ))
         points -= 10
 
-    # --------------------------------------------------------
-    # 8. Final Score
-    # --------------------------------------------------------
     score = max(0, min(100, points))
 
     if score >= 60:
@@ -161,9 +142,7 @@ def compute_score(
     else:
         verdict = "safe"
 
-    # --------------------------------------------------------
-    # 9. Recommendations (user-friendly)
-    # --------------------------------------------------------
+
     recommendations: List[Recommendation] = []
 
     if verdict == "unsafe":
@@ -194,9 +173,7 @@ def compute_score(
             message="Continue following good cyber hygiene, such as keeping devices updated."
         ))
 
-    # --------------------------------------------------------
-    # 10. Return Final Object
-    # --------------------------------------------------------
+
     context = {
         "security_protection": sec,
         "crime_12m_count": crime_count,

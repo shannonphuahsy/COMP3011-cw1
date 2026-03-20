@@ -8,10 +8,6 @@ from app.core.limiter import limiter
 
 router = APIRouter(prefix="/assessments", tags=["Assessments"])
 
-
-# ============================================================
-# Helper: Resolve hotspot by SSID + location
-# ============================================================
 async def resolve_hotspot(ssid: str, lat: float, lon: float):
     row = await models.get_nearest_hotspot_by_ssid(lat=lat, lon=lon, ssid=ssid)
     if not row:
@@ -21,10 +17,6 @@ async def resolve_hotspot(ssid: str, lat: float, lon: float):
         )
     return dict(row)
 
-
-# ============================================================
-# 1. SECURITY ASSESSMENT
-# ============================================================
 @router.get(
     "/security",
     summary="Security posture assessment (Open/WPA2/WPA3)",
@@ -48,10 +40,6 @@ async def security_assessment(
         "security_protection": hotspot["security_protection"]
     }
 
-
-# ============================================================
-# 2. CRIME ASSESSMENT
-# ============================================================
 @router.get(
     "/crime",
     summary="Environmental crime risk assessment",
@@ -76,10 +64,6 @@ async def crime_assessment(
         "crime_12m_count": crime
     }
 
-
-# ============================================================
-# 3. INCIDENTS ASSESSMENT
-# ============================================================
 @router.get(
     "/incidents",
     summary="User‑reported incident assessment",
@@ -104,10 +88,6 @@ async def incidents_assessment(
         "incidents": [dict(i) for i in incidents]
     }
 
-
-# ============================================================
-# 4. SSID SPOOFING RISK
-# ============================================================
 @router.get(
     "/ssid_risk",
     summary="SSID spoofing likelihood assessment",
@@ -135,10 +115,6 @@ async def ssid_risk_assessment(
         "spoof_risk": "high" if spoofable else "normal"
     }
 
-
-# ============================================================
-# 5. ENVIRONMENT ASSESSMENT
-# ============================================================
 @router.get(
     "/environment",
     summary="Environmental and captive‑portal risk assessment",

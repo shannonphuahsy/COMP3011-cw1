@@ -23,9 +23,6 @@ try:
         )
 
 except Exception:
-    # -------------------------------------------------------
-    # SlowAPI not installed → Provide safe no-op fallback
-    # -------------------------------------------------------
     ENABLED = False
 
     class _NoopLimiter:
