@@ -167,78 +167,143 @@ async def environment_assessment(
         "status": hotspot["status"],
         "distance_meters": hotspot.get("dist")
     }
-
-
-# ============================================================
-# 6. FINAL SAFETY ASSESSMENT (BSSID‑based)
-# ============================================================
 @router.get(
     "/safety",
     summary="General Wi‑Fi Safety Assessment",
     description=(
-        "Provides a human‑friendly Wi‑Fi safety verdict using BSSID‑based "
-        "matching. The score helps users understand the risk level clearly:\n\n"
-        "**🟢 0–30: Low Risk (Safe)** — Strong security, low crime levels, no suspicious activity.\n"
-        "**🟡 30–60: Medium Risk (Caution)** — Some concerns such as weaker security or minor incidents.\n"
-        "**🔴 60–100: High Risk (Unsafe)** — Open network, reported attacks, or high surrounding crime. Avoid use.\n\n"
-        "Returns the final risk score, verdict, reasons, recommendations and "
-        "contextual factors that influenced the decision."
-    )
+        "Returns a complete Wi‑Fi safety verdict based on SSID + location, using the "
+        "**cyber_exposure_score stored in the database**. Combines security, crime, SSID risk, "
+        "environmental factors and final recommendations.\n\n"
+        "**🟢 0–30: Low Risk** — Strong security, low crime, no suspicious activity.\n"
+        "**🟡 31–60: Medium Risk** — Some concerns such as weaker security or minor incidents.\n"
+        "**🔴 61–100: High Risk** — Open networks, suspicious incidents, high crime areas.\n"
+    ),
+    responses={200: {"description": "Composite safety assessment"}}
 )
 @limiter.limit("30/minute")
 async def safety_assessment(
     request: Request,
-    bssid: str = Query(...)
+    ssid: str = Query(..., description="SSID of the Wi‑Fi network"),
+    lat: float = Query(..., description="Latitude of the device"),
+    lon: float = Query(..., description="Longitude of the device"),
 ):
-    # Resolve wifi_id from BSSID
-    wifi_id = await models.get_wifi_id_from_bssid(bssid)
-    if not wifi_id:
-        raise HTTPException(status_code=404, detail="Unknown BSSID")
+    # --------------------------------------------------
+    # 1. Resolve hotspot from SSID + location
+    # --------------------------------------------------
+    hotspot = await resolve_hotspot(ssid, lat, lon)
+    wifi_id = hotspot["wifi_id"]
 
-    # Load hotspot
-    hotspot = await models.get_hotspot_by_wifi_id(wifi_id)
-    if not hotspot:
-        raise HTTPException(status_code=404, detail="Hotspot not found")
+    # --------------------------------------------------
+    # 2. Load DB‑stored cyber_exposure_score
+    # --------------------------------------------------
+    stored_row = await models.get_hotspot_by_wifi_id(wifi_id)
+    if not stored_row:
+        raise HTTPException(404, "Hotspot not found")
 
-    # Load crime + incidents
-    crime_count = await models.get_crime_count(wifi_id)
+    cyber_score = stored_row.get("cyber_exposure_score", 0)
+
+    # --------------------------------------------------
+    # 3. Load other signals
+    # --------------------------------------------------
+    crime_count = stored_row.get("crime_12m_count", 0)
+    security = stored_row.get("security_protection", "unknown")
+    distance = hotspot.get("dist")
+
+    # SSID spoofing heuristic
+    spoofable = any(
+        p in ssid.lower()
+        for p in ["free", "public", "guest", "wifi", "airport", "hotel"]
+    )
+    ssid_risk = "high" if spoofable else "normal"
+
+    environment = {
+        "status": stored_row.get("status"),
+        "distance_meters": distance
+    }
+
+    # Incidents
     incidents = await models.list_incidents(wifi_id)
+    incident_count = len(incidents)
 
-    # -------------------------------
-    # EXACT SHAPE THE TEST EXPECTS
-    # -------------------------------
+    # --------------------------------------------------
+    # 4. Verdict from stored score
+    # --------------------------------------------------
+    if cyber_score >= 60:
+        verdict = "unsafe"
+    elif cyber_score >= 30:
+        verdict = "caution"
+    else:
+        verdict = "safe"
 
+    # --------------------------------------------------
+    # 5. Generate reasons based on contributing factors
+    # --------------------------------------------------
+    reasons = []
+
+    # Security
+    if security == "open":
+        reasons.append({"code": "OPEN_NETWORK", "message": "This network is unencrypted.", "weight": 40})
+    elif security == "wpa2":
+        reasons.append({"code": "WPA2_NETWORK", "message": "WPA2 provides moderate security.", "weight": 20})
+    elif security == "wpa3":
+        reasons.append({"code": "WPA3_NETWORK", "message": "WPA3 provides strong security.", "weight": 5})
+
+    # Crime
+    if crime_count >= 20:
+        reasons.append({"code": "HIGH_CRIME_AREA", "message": "High recent crime around this hotspot.", "weight": 10})
+    elif crime_count >= 10:
+        reasons.append({"code": "MODERATE_CRIME_AREA", "message": "Moderate recent crime around this hotspot.", "weight": 5})
+
+    # Incidents
+    if incident_count > 0:
+        reasons.append({"code": "INCIDENT_HISTORY", "message": "Users have reported suspicious activity.", "weight": 10})
+
+    # SSID spoof risk
+    if ssid_risk == "high":
+        reasons.append({"code": "GENERIC_SSID", "message": "SSID is common and easy to spoof.", "weight": 10})
+
+    # --------------------------------------------------
+    # 6. Recommendations based on verdict
+    # --------------------------------------------------
+    recommendations = []
+
+    if verdict == "unsafe":
+        recommendations.append({"message": "Avoid sensitive transactions on this network."})
+        recommendations.append({"message": "Use a VPN or mobile data instead."})
+    elif verdict == "caution":
+        recommendations.append({"message": "Use HTTPS sites and consider a VPN."})
+    else:
+        recommendations.append({"message": "Network appears suitable for general use."})
+
+    # --------------------------------------------------
+    # 7. Final response
+    # --------------------------------------------------
     return {
         "wifi_id": wifi_id,
-        "bssid": bssid,
+        "ssid": ssid,
 
-        "risk_score": 50,
-        "crime_last_12m": crime_count or 0,
-        "security_rating": hotspot.get("security_protection", "unknown"),
+        # MAIN stored score
+        "cyber_exposure_score": float(cyber_score),
+        "verdict": verdict,
 
-        "score": 50,
-        "verdict": "caution",
+        # summarized sub-assessments
+        "security": security,
+        "crime_last_12m": crime_count,
+        "incident_count": incident_count,
+        "ssid_risk": ssid_risk,
+        "environment": environment,
 
-        "reasons": [
-            {
-                "code": "crime_context",
-                "message": f"Crime count in past 12 months: {crime_count or 0}.",
-                "weight": 5
-            }
-        ],
+        # generated reasoning
+        "reasons": reasons,
+        "recommendations": recommendations,
 
-        "recommendations": [
-            {
-                "message": "Use HTTPS websites and avoid sensitive transactions on public Wi‑Fi."
-            }
-        ],
-
+        # raw DB + derived context
         "context": {
-            "resolution_method": "bssid",
-            "crime_last_12m": crime_count or 0,
-            "incidents_count": len(incidents) if incidents else 0,
-            "security_protection": hotspot.get("security_protection"),
-            "confidence": "high",
-            "note": "Resolved by BSSID directly."
+            "resolution_method": "ssid+location",
+            "crime_12m_count": crime_count,
+            "security_protection": security,
+            "incidents_count": incident_count,
+            "distance_meters": distance,
+            "confidence": "high"
         }
     }

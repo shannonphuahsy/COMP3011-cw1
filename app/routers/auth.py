@@ -10,9 +10,8 @@ router = APIRouter(prefix="/auth", tags=["Authorization"])
 
 
 # --------------------------------------------------------------
-# SIGNUP (now using query parameters instead of request body)
+# SIGNUP (query parameters)
 # --------------------------------------------------------------
-
 @router.post("/signup")
 async def signup(
     email: str = Query(..., description="User email"),
@@ -20,8 +19,19 @@ async def signup(
 ):
     db = await get_db()
     try:
-        hashed = hash_password(password)
+        # --- Check if user already exists (409 Conflict)
+        existing = await db.fetchrow(
+            "SELECT id FROM auth_user WHERE email=$1;",
+            email
+        )
+        if existing:
+            raise HTTPException(
+                status_code=409,
+                detail="User with this email already exists."
+            )
 
+        # --- Create new user
+        hashed = hash_password(password)
         row = await db.fetchrow(
             """
             INSERT INTO auth_user (email, password_hash)
@@ -32,14 +42,14 @@ async def signup(
             hashed
         )
         return dict(row)
+
     finally:
         await db.close()
 
 
 # --------------------------------------------------------------
-# LOGIN (now using query parameters instead of request body)
+# LOGIN (query parameters)
 # --------------------------------------------------------------
-
 @router.post("/login", response_model=TokenResponse)
 async def login(
     email: str = Query(..., description="User email"),
@@ -47,16 +57,27 @@ async def login(
 ):
     db = await get_db()
     try:
+        # Look up user by email
         row = await db.fetchrow(
             "SELECT id, email, password_hash, role FROM auth_user WHERE email=$1",
             email,
         )
+
+        # --- Standardised 401: wrong email or no such user
         if not row:
-            raise HTTPException(401, "Invalid credentials")
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid credentials."
+            )
 
+        # --- Standardised 401: wrong password
         if not verify_password(password, row["password_hash"]):
-            raise HTTPException(401, "Invalid credentials")
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid credentials."
+            )
 
+        # Create JWT token
         token = create_access_token({
             "sub": row["email"],
             "role": row["role"],
@@ -64,5 +85,6 @@ async def login(
         })
 
         return {"access_token": token}
+
     finally:
         await db.close()

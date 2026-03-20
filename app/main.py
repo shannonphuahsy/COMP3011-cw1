@@ -1,7 +1,7 @@
 # app/main.py
 
 from fastapi import FastAPI, HTTPException
-from app.db.database import get_db, connect_to_db, DATABASE_URL, disconnect_db
+from app.db.database import get_db
 
 # Routers
 from app.routers.internal import router as internal_router
@@ -28,15 +28,6 @@ app = FastAPI(
     version="1.0.0",
 )
 
-@app.on_event("startup")
-async def startup_event():
-    await connect_to_db()
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    await disconnect_db()
-
-    print("DATABASE_URL =", DATABASE_URL)
 # -----------------------------------------
 # ROUTERS
 # -----------------------------------------
@@ -50,9 +41,7 @@ app.include_router(internal_router)
 # -----------------------------------------
 # HEALTH ENDPOINTS
 # -----------------------------------------
-@app.get("/")
-def root():
-    return {"message": "API is running"}
+
 @app.get("/livez")
 async def livez():
     return {"status": "alive"}
@@ -61,12 +50,12 @@ async def livez():
 @app.get("/readyz")
 async def readyz():
     try:
-        async for conn in get_db():
-            await conn.execute("SELECT 1")
+        conn = await get_db()
+        await conn.execute("SELECT 1")
+        await conn.close()
         return {"status": "ready"}
-    except Exception as e:
-        print("DB connection failed:", e)
-        return {"status": "not ready"}
+    except Exception:
+        raise HTTPException(503, "not ready")
 
 
 @app.get("/healthz")

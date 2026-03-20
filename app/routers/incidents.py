@@ -59,67 +59,59 @@ async def create_incident_route(
     ),
     responses={
         200: {"description": "List of incidents (may be empty)"},
-        404: {"description": "Hotspot has no recorded incidents (optional)"}
+        404: {"description": "Hotspot has no recorded incidents"}
     }
 )
 async def list_for_wifi(wifi_id: str):
     rows = await models.list_incidents(wifi_id)
     return [dict(r) for r in rows]
 
-
-# --------------------------------------------------------------
-# UPDATE INCIDENT  (NOW USING QUERY PARAMETER)
-# --------------------------------------------------------------
-
 @router.patch(
     "/{incident_id}",
     summary="Update an incident",
     description=(
-        "Updates the **description** text of an existing incident. This is typically used "
-        "when refining the original report, fixing typos, or adding clarifications. "
-        "The hotspot association cannot be changed."
+        "Updates the description text of an existing incident. "
+        "Retrieve incident IDs using GET /incidents/{wifi_id}."
     ),
     responses={
         200: {"description": "Incident successfully updated"},
         404: {"description": "Incident not found"},
         422: {"description": "Validation error"}
-    }
+    },
+    dependencies=[Depends(require_user)]
 )
-@limiter.limit("10/minute")
 async def update_incident_route(
     request: Request,
     incident_id: int,
     description: str = Query(..., min_length=3, description="New description for the incident"),
-    user=Depends(require_user)  # ← ADDED
 ):
     row = await models.update_incident(incident_id, description)
     if not row:
-        raise HTTPException(404, "Incident not found")
+        raise HTTPException(status_code=404, detail="Incident not found")
     return dict(row)
-
-
-# --------------------------------------------------------------
-# DELETE INCIDENT  (AUTH REQUIRED — UNCHANGED INPUT)
-# --------------------------------------------------------------
 
 @router.delete(
     "/{incident_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Delete an incident",
     description=(
-        "Deletes the specified incident permanently. This operation is irreversible and "
-        "typically restricted to administrative tools or automated cleanup tasks."
+        "Deletes the specified incident permanently. "
+        "Retrieve incident IDs using GET /incidents/{wifi_id}`."
     ),
     responses={
         204: {"description": "Incident successfully deleted"},
         404: {"description": "Incident not found"}
-    }
+    },
+    dependencies=[Depends(require_user)]
 )
-@limiter.limit("10/minute")
 async def delete_incident_route(
     request: Request,
     incident_id: int,
-    user=Depends(require_user)  # ← ADDED
 ):
-    await models.delete_incident(incident_id)
+    deleted = await models.delete_incident(incident_id)
+
+    # Ensure correct 404 behavior
+    if deleted is False:
+        raise HTTPException(status_code=404, detail="Incident not found")
+
     return None

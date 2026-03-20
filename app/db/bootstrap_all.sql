@@ -411,11 +411,6 @@ CREATE TABLE IF NOT EXISTS api.api_hotspot_crime_12m_500m (
     crime_12m_count INTEGER
 );
 
--- If your materialized view already exists,
--- DO NOT DROP IT — tests only need this simple table.
--- They will populate it manually.
-
--- 4. Simple risk view — exactly what the tests expect
 CREATE OR REPLACE VIEW api.api_wifi_hotspot_risk AS
 SELECT
     h.wifi_id,
@@ -424,7 +419,7 @@ SELECT
     h.status,
     h.security_protection,
     c.crime_12m_count,
-    50 AS cyber_exposure_score,    -- dummy score, tests don't check formula
+    h.cyber_exposure_score,
     h.geom_geog
 FROM core.core_wifi_hotspot h
 LEFT JOIN api.api_hotspot_crime_12m_500m c
@@ -446,3 +441,103 @@ VALUES (
 )
 ON CONFLICT (wifi_id) DO NOTHING;
 
+SELECT wifi_id, cyber_exposure_score FROM api.api_wifi_hotspot_risk LIMIT 10;
+
+DROP VIEW IF EXISTS api.api_wifi_hotspot_risk;
+
+CREATE OR REPLACE VIEW api.api_wifi_hotspot_risk
+(   wifi_id,
+    name,
+    postcode,
+    city,
+    latitude,
+    longitude,
+    status,
+    security_protection,
+    cyber_exposure_score,
+    risk_label,
+    crime_12m_count,
+    incidents_count,
+    last_incident_at,
+    geom_geog
+)
+AS
+WITH incidents_agg AS (
+  SELECT
+    wifi_id,
+    COUNT(*) AS incidents_count,
+    MAX(created_at) AS last_incident_at
+  FROM api.api_user_incidents
+  GROUP BY wifi_id
+),
+crime AS (
+  SELECT
+    wifi_id,
+    crime_12m_count
+  FROM api.api_hotspot_crime_12m_500m
+),
+base AS (
+  SELECT
+    h.wifi_id,
+    h.name,
+    h.postcode,
+    h.city,
+    h.latitude,
+    h.longitude,
+    h.status,
+    h.security_protection,
+    h.geom_geog,
+    COALESCE(c.crime_12m_count, 0) AS crime_12m_count,
+    COALESCE(i.incidents_count, 0) AS incidents_count,
+    i.last_incident_at
+  FROM core.core_wifi_hotspot h
+  LEFT JOIN crime c USING (wifi_id)
+  LEFT JOIN incidents_agg i USING (wifi_id)
+),
+scored AS (
+  SELECT
+    b.*,
+    CASE LOWER(COALESCE(b.security_protection, ''))
+      WHEN 'open' THEN 60
+      WHEN 'wpa2' THEN 30
+      WHEN 'wpa3' THEN 10
+      ELSE 20
+    END AS pts_security,
+    CASE
+      WHEN b.crime_12m_count >= 20 THEN 10
+      WHEN b.crime_12m_count >= 10 THEN 5
+      ELSE 0
+    END AS pts_crime,
+    CASE
+      WHEN b.incidents_count > 0 THEN 10
+      ELSE 0
+    END AS pts_incidents
+  FROM base b
+),
+final AS (
+  SELECT
+    s.*,
+    LEAST(100.0, GREATEST(0.0, (s.pts_security + s.pts_crime + s.pts_incidents)))::float AS cyber_exposure_score,
+    CASE
+      WHEN (s.pts_security + s.pts_crime + s.pts_incidents) >= 60 THEN 'unsafe'
+      WHEN (s.pts_security + s.pts_crime + s.pts_incidents) >= 30 THEN 'caution'
+      ELSE 'safe'
+    END AS risk_label
+  FROM scored s
+)
+SELECT
+  wifi_id,
+  name,
+  postcode,
+  city,
+  latitude,
+  longitude,
+  status,
+  security_protection,
+  cyber_exposure_score,
+  risk_label,
+  crime_12m_count,
+  incidents_count,
+  last_incident_at,
+  geom_geog
+FROM final;

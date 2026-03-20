@@ -1,7 +1,0 @@
-FROM postgis/postgis:16-3.4
-
-ENV POSTGRES_DB=wifi_risk_db
-ENV POSTGRES_USER=postgres
-ENV POSTGRES_PASSWORD=abc1234
-
-EXPOSE 5432

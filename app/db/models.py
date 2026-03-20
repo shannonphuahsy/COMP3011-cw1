@@ -2,26 +2,17 @@
 
 from typing import Any, Dict, List, Optional
 from app.db.database import get_db
-
+from app.services.scoring import compute_score  # NEW
 
 # ============================================================
 # BSSID → WiFi lookup
 # ============================================================
-async def get_wifi_id_from_bssid(bssid: str) -> Optional[str]:
-    """
-    Resolve a BSSID (AP MAC) to the owning wifi_id.
 
-    Returns:
-        wifi_id (str) if found, else None.
-    """
+async def get_wifi_id_from_bssid(bssid: str) -> Optional[str]:
     db = await get_db()
     try:
         row = await db.fetchrow(
-            """
-            SELECT wifi_id
-            FROM api.api_wifi_bssid_map
-            WHERE bssid = $1
-            """,
+            "SELECT wifi_id FROM api.api_wifi_bssid_map WHERE bssid = $1",
             bssid,
         )
         return row["wifi_id"] if row else None
@@ -32,21 +23,12 @@ async def get_wifi_id_from_bssid(bssid: str) -> Optional[str]:
 # ============================================================
 # Hotspot lookups / updates
 # ============================================================
-async def get_hotspot_by_wifi_id(wifi_id: str):
-    """
-    Return the enriched hotspot record (from view api.api_wifi_hotspot_risk) for a wifi_id.
 
-    Returns:
-        asyncpg.Record or None
-    """
+async def get_hotspot_by_wifi_id(wifi_id: str):
     db = await get_db()
     try:
         row = await db.fetchrow(
-            """
-            SELECT *
-            FROM api.api_wifi_hotspot_risk
-            WHERE wifi_id = $1
-            """,
+            "SELECT * FROM api.api_wifi_hotspot_risk WHERE wifi_id = $1",
             wifi_id,
         )
         return row
@@ -55,17 +37,10 @@ async def get_hotspot_by_wifi_id(wifi_id: str):
 
 
 async def update_hotspot_status(wifi_id: str, status: str) -> None:
-    """
-    Update hotspot.status in the core table.
-    """
     db = await get_db()
     try:
         await db.execute(
-            """
-            UPDATE core.core_wifi_hotspot
-            SET status = $2
-            WHERE wifi_id = $1
-            """,
+            "UPDATE core.core_wifi_hotspot SET status = $2 WHERE wifi_id = $1",
             wifi_id,
             status,
         )
@@ -74,17 +49,10 @@ async def update_hotspot_status(wifi_id: str, status: str) -> None:
 
 
 async def update_hotspot_security(wifi_id: str, sec: str) -> None:
-    """
-    Update hotspot.security_protection in the core table.
-    """
     db = await get_db()
     try:
         await db.execute(
-            """
-            UPDATE core.core_wifi_hotspot
-            SET security_protection = $2
-            WHERE wifi_id = $1
-            """,
+            "UPDATE core.core_wifi_hotspot SET security_protection = $2 WHERE wifi_id = $1",
             wifi_id,
             sec,
         )
@@ -93,20 +61,83 @@ async def update_hotspot_security(wifi_id: str, sec: str) -> None:
 
 
 # ============================================================
-# Crime context
+# NEW: Cyber Exposure Score update
 # ============================================================
-async def get_crime_count(wifi_id: str) -> int:
+
+async def update_cyber_score(wifi_id: str, score: int) -> None:
     """
-    Return crime_12m_count for a wifi_id (0 if none).
+    Updates cyber_exposure_score stored in the core table.
     """
     db = await get_db()
     try:
-        row = await db.fetchrow(
+        await db.execute(
             """
-            SELECT crime_12m_count
-            FROM api.api_hotspot_crime_12m_500m
+            UPDATE core.core_wifi_hotspot
+            SET cyber_exposure_score = $2
             WHERE wifi_id = $1
             """,
+            wifi_id,
+            score,
+        )
+    finally:
+        await db.close()
+
+
+# ============================================================
+# NEW: Get ALL hotspots (for automated scoring)
+# ============================================================
+
+async def get_all_hotspots():
+    db = await get_db()
+    try:
+        rows = await db.fetch("SELECT * FROM api.api_wifi_hotspot_risk")
+        return rows
+    finally:
+        await db.close()
+
+
+# ============================================================
+# NEW: Recompute Cyber Scores (batch update)
+# ============================================================
+
+async def refresh_cyber_scores():
+    """
+    Recompute cyber_exposure_score for ALL hotspots using compute_score(),
+    and update the core table.
+    """
+    hotspots = await get_all_hotspots()
+
+    for hotspot in hotspots:
+        wifi_id = hotspot["wifi_id"]
+
+        # Crime + incidents
+        crime = await get_crime_count(wifi_id)
+        incidents = await list_incidents(wifi_id)
+
+        # Compute dynamic score
+        assessment = compute_score(
+            hotspot=dict(hotspot),
+            crime_count=crime,
+            bssid="(system)",
+            recent_incidents=[dict(i) for i in incidents],
+            ssid=hotspot["name"],
+            distance=None,
+            client_hints=None,
+        )
+
+        # Save update
+        await update_cyber_score(wifi_id, assessment.score)
+
+
+# ============================================================
+# Crime context
+# ============================================================
+
+async def get_crime_count(wifi_id: str) -> int:
+    db = await get_db()
+    try:
+        row = await db.fetchrow(
+            "SELECT crime_12m_count FROM api.api_hotspot_crime_12m_500m WHERE wifi_id = $1",
             wifi_id,
         )
         return int(row["crime_12m_count"]) if row and row["crime_12m_count"] is not None else 0
@@ -117,13 +148,8 @@ async def get_crime_count(wifi_id: str) -> int:
 # ============================================================
 # Incidents (CRUD)
 # ============================================================
-async def create_incident(wifi_id: str, bssid: str, desc: str):
-    """
-    Insert a user-reported incident and return the inserted row.
 
-    Returns:
-        asyncpg.Record
-    """
+async def create_incident(wifi_id: str, bssid: str, desc: str):
     db = await get_db()
     try:
         row = await db.fetchrow(
@@ -142,12 +168,6 @@ async def create_incident(wifi_id: str, bssid: str, desc: str):
 
 
 async def update_incident(incident_id: int, description: str):
-    """
-    Update an incident's description and return the updated row.
-
-    Returns:
-        asyncpg.Record or None
-    """
     db = await get_db()
     try:
         row = await db.fetchrow(
@@ -166,21 +186,10 @@ async def update_incident(incident_id: int, description: str):
 
 
 async def list_incidents(wifi_id: str):
-    """
-    List incidents for a wifi_id (newest first).
-
-    Returns:
-        List[asyncpg.Record]
-    """
     db = await get_db()
     try:
         rows = await db.fetch(
-            """
-            SELECT *
-            FROM api.api_user_incidents
-            WHERE wifi_id = $1
-            ORDER BY created_at DESC
-            """,
+            "SELECT * FROM api.api_user_incidents WHERE wifi_id = $1 ORDER BY created_at DESC",
             wifi_id,
         )
         return rows
@@ -189,18 +198,9 @@ async def list_incidents(wifi_id: str):
 
 
 async def delete_incident(incident_id: int) -> None:
-    """
-    Delete an incident by id.
-    """
     db = await get_db()
     try:
-        await db.execute(
-            """
-            DELETE FROM api.api_user_incidents
-            WHERE id = $1
-            """,
-            incident_id,
-        )
+        await db.execute("DELETE FROM api.api_user_incidents WHERE id = $1", incident_id)
     finally:
         await db.close()
 
@@ -208,13 +208,8 @@ async def delete_incident(incident_id: int) -> None:
 # ============================================================
 # Proximity / Discovery
 # ============================================================
-async def get_hotspots_near(lat: float, lon: float, radius: int):
-    """
-    Radius search using ST_DWithin; returns up to 50 hotspots ordered by distance.
 
-    Returns:
-        List[asyncpg.Record]
-    """
+async def get_hotspots_near(lat: float, lon: float, radius: int):
     db = await get_db()
     try:
         rows = await db.fetch(
@@ -238,12 +233,6 @@ async def get_hotspots_near(lat: float, lon: float, radius: int):
 
 
 async def get_ranked_hotspots(city: str, limit: int = 50):
-    """
-    Return hotspots in a city ranked by cyber_exposure_score (desc).
-
-    Returns:
-        List[asyncpg.Record]
-    """
     db = await get_db()
     try:
         rows = await db.fetch(
@@ -263,15 +252,10 @@ async def get_ranked_hotspots(city: str, limit: int = 50):
 
 
 # ============================================================
-# KNN (Top-K closest)
+# KNN (Top-K)
 # ============================================================
-async def get_hotspots_knn(lat: float, lon: float, k: int):
-    """
-    K-nearest hotspots (index-assisted ORDER BY <->). See that a GiST index exists on geography.
 
-    Returns:
-        List[asyncpg.Record]
-    """
+async def get_hotspots_knn(lat: float, lon: float, k: int):
     db = await get_db()
     try:
         rows = await db.fetch(
@@ -279,16 +263,14 @@ async def get_hotspots_knn(lat: float, lon: float, k: int):
             WITH q AS (
                 SELECT ST_SetSRID(ST_MakePoint($2, $1), 4326)::geography AS g
             )
-            SELECT
-                h.*,
-                h.geom_geog <-> q.g AS dist
+            SELECT h.*, h.geom_geog <-> q.g AS dist
             FROM api.api_wifi_hotspot_risk h, q
             ORDER BY dist
             LIMIT $3;
             """,
-            lat,   # $1
-            lon,   # $2
-            k,     # $3
+            lat,
+            lon,
+            k,
         )
         return rows
     finally:
@@ -296,15 +278,10 @@ async def get_hotspots_knn(lat: float, lon: float, k: int):
 
 
 # ============================================================
-# Resolution helpers for /assessments/safety/current
+# Resolution Helpers
 # ============================================================
-async def get_nearest_hotspot(lat: float, lon: float):
-    """
-    Nearest hotspot regardless of SSID (KNN).
 
-    Returns:
-        asyncpg.Record or None
-    """
+async def get_nearest_hotspot(lat: float, lon: float):
     db = await get_db()
     try:
         row = await db.fetchrow(
@@ -326,12 +303,6 @@ async def get_nearest_hotspot(lat: float, lon: float):
 
 
 async def get_nearest_hotspot_by_ssid(lat: float, lon: float, ssid: str):
-    """
-    Nearest hotspot matching SSID (case-insensitive), using KNN.
-
-    Returns:
-        asyncpg.Record or None
-    """
     db = await get_db()
     try:
         row = await db.fetchrow(
@@ -355,30 +326,23 @@ async def get_nearest_hotspot_by_ssid(lat: float, lon: float, ssid: str):
 
 
 # ============================================================
-# Simple spoof-risk heuristic (placeholder)
+# Spoof-risk heuristic
 # ============================================================
+
 async def detect_basic_spoof_risk(
     wifi_id: str,
-    bssid: str,  # currently unused but kept for future OUI/scan-list checks
+    bssid: str,
     ssid: Optional[str] = None,
     rssi: Optional[int] = None,
 ) -> bool:
-    """
-    Minimal heuristic:
-    - If an SSID is supplied and equals the official hotspot name,
-      and the measured RSSI is extremely strong (>-35 dBm), flag mild suspicion.
-    - Intended as a placeholder until you add a scan-list and OUI checks.
-
-    Returns:
-        True if suspicious, else False.
-    """
     hotspot = await get_hotspot_by_wifi_id(wifi_id)
     if not hotspot:
         return False
 
-    # asyncpg Record field access
-    official_name = (hotspot["name"] or "").strip() if "name" in hotspot else ""
+    official_name = (hotspot["name"] or "").strip()
+
     if ssid and official_name and ssid.strip() == official_name and rssi is not None:
         if rssi > -35:
             return True
+
     return False

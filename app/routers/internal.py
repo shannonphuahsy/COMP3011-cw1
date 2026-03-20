@@ -1,9 +1,9 @@
 # app/routers/internal.py
-
 from fastapi import APIRouter, Depends, HTTPException
 from app.services.api_key import require_api_key
 from app.db.database import get_db
 import time
+import importlib
 
 router = APIRouter(
     prefix="/internal",
@@ -15,11 +15,9 @@ START_TIME = time.time()
 # --------------------------------------------------------------
 # 1. SYSTEM STATISTICS
 # --------------------------------------------------------------
+
 @router.get("/stats", dependencies=[Depends(require_api_key)])
 async def internal_stats():
-    """
-    Returns operational statistics for monitoring and debugging.
-    """
     db = await get_db()
 
     hotspot_count = await db.fetchval("SELECT COUNT(*) FROM core.core_wifi_hotspot;")
@@ -44,9 +42,12 @@ async def internal_stats():
 # --------------------------------------------------------------
 @router.get("/version", dependencies=[Depends(require_api_key)])
 async def version_info():
-    """
-    Returns database, PostGIS, and API version information.
-    """
+    # Get API version dynamically from package metadata
+    try:
+        api_version = importlib.metadata.version("app")  # your package name
+    except importlib.metadata.PackageNotFoundError:
+        api_version = "unknown"
+
     db = await get_db()
     try:
         postgres_version = await db.fetchval("SELECT version();")
@@ -55,7 +56,9 @@ async def version_info():
         await db.close()
 
     return {
-        "api_version": "1.0.0",
+        "api_version": api_version,
         "postgres_version": postgres_version,
         "postgis_version": postgis_version,
     }
+
+

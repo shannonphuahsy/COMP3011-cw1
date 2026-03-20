@@ -3,41 +3,11 @@
 from typing import Any, Dict, List, Optional
 from app.schemas.assessment import SafetyAssessment, Reason, Recommendation
 
-# ============================================================
-# Comprehensive Safety Scoring Model
-# ============================================================
-# This scoring model combines:
-#   1. Wi‑Fi security strength (Open / WPA2 / WPA3)
-#   2. Environmental crime exposure
-#   3. User‑reported incident frequency
-#   4. SSID spoofability (generic/common SSIDs)
-#   5. Captive portal phishing indicators
-#   6. Distance anomaly (evil‑twin heuristic)
-#   7. Client-side mitigations (VPN, HTTPS-only)
-#
-# These factors correspond to well-documented risks in
-# public Wi‑Fi security advisories, including:
-# - Sniffing & Man-in-the-Middle attacks on open Wi-Fi
-# - Evil‑twin hotspots spoofing popular SSIDs
-# - Captive-portal phishing
-# - Opportunistic cybercrime in high-crime areas
-# - Importance of VPN and HTTPS to reduce exposure
-#
-# Score (0–100):
-#   safe     < 30
-#   caution  30–59
-#   unsafe   >= 60
-#
-# Final output: SafetyAssessment(verdict, score, reasons, recommendations)
-# ============================================================
-
-
 def compute_score(
     hotspot: Dict[str, Any],
     crime_count: int,
     bssid: str,
     recent_incidents: List[Dict[str, Any]],
-    evil_twin_suspected: bool = False,
     client_hints: Optional[Dict[str, bool]] = None,
     ssid: Optional[str] = None,
     distance: Optional[float] = None,
